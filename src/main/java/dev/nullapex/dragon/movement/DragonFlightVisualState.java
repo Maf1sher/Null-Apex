@@ -28,4 +28,27 @@ public final class DragonFlightVisualState {
             dragon.setData(ModAttachments.DRAGON_ASCENT_PITCH, clampedPitch);
         }
     }
+
+    public static Float flightPitchDegrees(EnderDragon dragon) {
+        return dragon.getExistingDataOrNull(ModAttachments.DRAGON_FLIGHT_PITCH);
+    }
+
+    public static void setFlightPitchDegrees(EnderDragon dragon, Float pitchDegrees) {
+        if (dragon.level().isClientSide) {
+            return;
+        }
+
+        Float currentPitch = dragon.getExistingDataOrNull(ModAttachments.DRAGON_FLIGHT_PITCH);
+        if (pitchDegrees == null) {
+            if (currentPitch != null) {
+                dragon.removeData(ModAttachments.DRAGON_FLIGHT_PITCH);
+            }
+            return;
+        }
+
+        float clampedPitch = (float)FlightMath.clamp(pitchDegrees, -90.0, 90.0);
+        if (currentPitch == null || Float.compare(currentPitch, clampedPitch) != 0) {
+            dragon.setData(ModAttachments.DRAGON_FLIGHT_PITCH, clampedPitch);
+        }
+    }
 }

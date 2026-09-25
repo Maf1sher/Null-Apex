@@ -2,6 +2,7 @@ package dev.nullapex.dragon.movement;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
@@ -131,6 +132,53 @@ class FlightMathTest {
             DragonFlightVisualMath.ascentPitch(new FlightVector(0.0, 1.0, 0.0)),
             1.0E-6F
         );
+    }
+
+    @Test
+    void flightPitchFollowsUpwardAndDownwardVelocityAndIgnoresStillVectors() {
+        assertEquals(
+            56.309932F,
+            DragonFlightPoseMath.pitchDegrees(new FlightVector(0.4, 0.6, 0.0)),
+            1.0E-4F
+        );
+        assertEquals(-90.0F, DragonFlightPoseMath.pitchDegrees(new FlightVector(0.0, -1.0, 0.0)), 1.0E-5F);
+        assertNull(DragonFlightPoseMath.pitchDegrees(FlightVector.ZERO));
+    }
+
+    @Test
+    void partOffsetsFollowDragonYawAndFlightPitch() {
+        FlightVector levelForward = DragonFlightPoseMath.forwardOffset(0.0F, 0.0F, 2.0);
+        assertEquals(0.0, levelForward.x(), 1.0E-9);
+        assertEquals(0.0, levelForward.y(), 1.0E-9);
+        assertEquals(-2.0, levelForward.z(), 1.0E-9);
+
+        FlightVector vertical = DragonFlightPoseMath.forwardOffset(90.0F, 90.0F, 6.0);
+        assertEquals(0.0, vertical.x(), 1.0E-9);
+        assertEquals(6.0, vertical.y(), 1.0E-9);
+        assertEquals(0.0, vertical.z(), 1.0E-9);
+
+        FlightVector downward = DragonFlightPoseMath.forwardOffset(0.0F, -30.0F, 4.0);
+        assertEquals(-2.0, downward.y(), 1.0E-9);
+        assertEquals(-Math.sqrt(12.0), downward.z(), 1.0E-9);
+    }
+
+    @Test
+    void verticalImpactRoutineBuildsSpeedAndBrakesBeforeItsApex() {
+        assertEquals(1.8, VerticalImpactRoutine.climbSpeedForRemainingDistance(80.0), 1.0E-9);
+        assertEquals(1.8, VerticalImpactRoutine.climbSpeedForRemainingDistance(24.25), 1.0E-9);
+        assertEquals(0.8, VerticalImpactRoutine.climbSpeedForRemainingDistance(8.0), 1.0E-9);
+        assertEquals(0.0, VerticalImpactRoutine.climbSpeedForRemainingDistance(4.0), 1.0E-9);
+
+        assertFalse(VerticalImpactRoutine.shouldBeginTurn(91.0, 100.0, 0.1));
+        assertFalse(VerticalImpactRoutine.shouldBeginTurn(93.0, 100.0, 0.2));
+        assertTrue(VerticalImpactRoutine.shouldBeginTurn(93.0, 100.0, 0.1));
+    }
+
+    @Test
+    void verticalImpactRoutineDetectsCrossingTheCapturedGroundSurface() {
+        assertFalse(VerticalImpactRoutine.crossedImpactSurface(10.0, 9.6, 9.5));
+        assertTrue(VerticalImpactRoutine.crossedImpactSurface(10.0, 9.0, 9.5));
+        assertFalse(VerticalImpactRoutine.crossedImpactSurface(9.0, 8.0, 9.5));
     }
 
     @Test

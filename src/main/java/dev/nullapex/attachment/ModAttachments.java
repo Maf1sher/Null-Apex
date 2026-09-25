@@ -17,6 +17,11 @@ public final class ModAttachments {
         () -> AttachmentType.builder(() -> 0.0F).sync(ByteBufCodecs.FLOAT).build()
     );
 
+    public static final Supplier<AttachmentType<Float>> DRAGON_FLIGHT_PITCH = ATTACHMENT_TYPES.register(
+        "dragon_flight_pitch",
+        () -> AttachmentType.builder(() -> 0.0F).sync(ByteBufCodecs.FLOAT).build()
+    );
+
     private ModAttachments() {
     }
 }

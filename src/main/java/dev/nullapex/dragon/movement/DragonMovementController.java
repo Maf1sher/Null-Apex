@@ -18,6 +18,7 @@ public final class DragonMovementController {
     private static final float MAX_TURN_RESPONSIVENESS = 0.50F;
     private static final float MAX_DIRECT_TURN_RESPONSIVENESS = 1.0F;
     private static final double VERTICAL_ACCELERATION_SCALE = 0.01;
+    private static final double FLIGHT_PITCH_CHANGE_PER_TICK = 6.0;
     private static final float TURN_CHANGE_PER_TICK = 0.04F;
     private static final double THROTTLE_CHANGE_PER_TICK = 0.12;
     private static final double THROTTLE_BRAKING_PER_TICK = 0.24;
@@ -26,7 +27,9 @@ public final class DragonMovementController {
     private FlightCommand activeCommand;
     private FlightRoutine routine;
     private float smoothedTurnResponsiveness;
+    private float smoothedFlightPitch;
     private double smoothedThrottle;
+    private boolean flightPitchInitialized;
     private boolean turnResponsivenessInitialized;
     private boolean throttleInitialized;
 
@@ -70,7 +73,7 @@ public final class DragonMovementController {
     }
 
     public Vec3 resolveTarget(EnderDragon dragon, DragonPhaseInstance phase, Vec3 vanillaTarget) {
-        if (this.requiresVanillaControl(phase)) {
+        if (this.shouldYieldControl(phase)) {
             this.clearRoutineState(dragon);
             return vanillaTarget;
         }
@@ -82,11 +85,14 @@ public final class DragonMovementController {
 
         FlightCommand command = this.routine.tick(dragon);
         if (command == null) {
+            DragonPhaseInstance currentPhase = dragon.getPhaseManager().getCurrentPhase();
+            boolean phaseChanged = currentPhase != phase;
             this.clearRoutineState(dragon);
-            return vanillaTarget;
+            return phaseChanged ? currentPhase.getFlyTargetLocation() : vanillaTarget;
         }
 
         this.activeCommand = command;
+        this.updateFlightPitch(dragon, command);
         float ascentPitch = command.usesDirectVelocity()
             ? DragonFlightVisualMath.ascentPitch(toFlightVector(command.desiredVelocity()))
             : 0.0F;
@@ -203,9 +209,33 @@ public final class DragonMovementController {
         this.activeCommand = null;
         this.smoothedTarget = null;
         this.smoothedThrottle = 1.0;
+        this.flightPitchInitialized = false;
         this.throttleInitialized = false;
         this.turnResponsivenessInitialized = false;
         DragonFlightVisualState.setAscentPitch(dragon, 0.0F);
+        DragonFlightVisualState.setFlightPitchDegrees(dragon, null);
+    }
+
+    private void updateFlightPitch(EnderDragon dragon, FlightCommand command) {
+        Float requestedPitch = command.usesDirectVelocity()
+            ? DragonFlightPoseMath.pitchDegrees(toFlightVector(command.desiredVelocity()))
+            : null;
+        if (requestedPitch == null) {
+            this.flightPitchInitialized = false;
+            DragonFlightVisualState.setFlightPitchDegrees(dragon, null);
+            return;
+        }
+
+        if (!this.flightPitchInitialized) {
+            double historyPitch = (dragon.getLatencyPos(5, 1.0F)[1] - dragon.getLatencyPos(10, 1.0F)[1]) * 10.0;
+            this.smoothedFlightPitch = (float)FlightMath.clamp(historyPitch, -90.0, 90.0);
+            this.flightPitchInitialized = true;
+        }
+
+        this.smoothedFlightPitch = (float)FlightMath.approach(
+            this.smoothedFlightPitch, requestedPitch, FLIGHT_PITCH_CHANGE_PER_TICK
+        );
+        DragonFlightVisualState.setFlightPitchDegrees(dragon, this.smoothedFlightPitch);
     }
 
     private static boolean requiresVanillaControl(DragonPhaseInstance phase) {
@@ -214,6 +244,13 @@ public final class DragonMovementController {
             || currentPhase == EnderDragonPhase.DYING
             || currentPhase == EnderDragonPhase.LANDING_APPROACH
             || currentPhase == EnderDragonPhase.LANDING;
+    }
+
+    private boolean shouldYieldControl(DragonPhaseInstance phase) {
+        if (this.routine instanceof VerticalImpactRoutine) {
+            return phase.getPhase() == EnderDragonPhase.DYING;
+        }
+        return requiresVanillaControl(phase);
     }
 
     private Vec3 alignTargetToFlightTrend(EnderDragon dragon, Vec3 target) {

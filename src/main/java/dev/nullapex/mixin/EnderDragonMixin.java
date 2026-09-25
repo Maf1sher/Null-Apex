@@ -1,16 +1,29 @@
 package dev.nullapex.mixin;
 
 import dev.nullapex.dragon.movement.DragonMovementController;
+import dev.nullapex.dragon.movement.DragonFlightHitboxAlignment;
+import dev.nullapex.dragon.movement.DragonFlightVisualState;
 import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
 import net.minecraft.world.entity.boss.enderdragon.phases.DragonPhaseInstance;
 import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.Redirect;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(EnderDragon.class)
 abstract class EnderDragonMixin {
+    @Inject(method = "aiStep", at = @At("TAIL"))
+    private void nullApex$alignCustomFlightHitboxes(CallbackInfo callbackInfo) {
+        EnderDragon dragon = (EnderDragon)(Object)this;
+        Float flightPitch = DragonFlightVisualState.flightPitchDegrees(dragon);
+        if (flightPitch != null) {
+            DragonFlightHitboxAlignment.align(dragon, flightPitch);
+        }
+    }
+
     @Redirect(
         method = "aiStep",
         at = @At(
