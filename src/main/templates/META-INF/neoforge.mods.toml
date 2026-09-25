@@ -7,7 +7,7 @@ modId="${mod_id}"
 version="${mod_version}"
 displayName="${mod_name}"
 description='''
-Pusty szkielet moda Null Apex.
+Null Apex enhances the Ender Dragon fight with controlled, smooth flight.
 '''
 
 [[dependencies.${mod_id}]]
@@ -23,3 +23,6 @@ type="required"
 versionRange="${minecraft_version_range}"
 ordering="NONE"
 side="BOTH"
+
+[[mixins]]
+config="null_apex.mixins.json"

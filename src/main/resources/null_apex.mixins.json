@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "dev.nullapex.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "EnderDragonMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
