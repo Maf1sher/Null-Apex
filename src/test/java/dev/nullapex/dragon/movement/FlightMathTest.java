@@ -108,6 +108,32 @@ class FlightMathTest {
     }
 
     @Test
+    void climbUsesDiagonalVelocityToReduceVanillaWingFlapRate() {
+        FlightVector velocity = TestDiveRoutine.climbVelocity(3.0, 4.0, 100.0);
+
+        assertEquals(0.24, velocity.x(), 1.0E-9);
+        assertEquals(0.6, velocity.y(), 1.0E-9);
+        assertEquals(0.32, velocity.z(), 1.0E-9);
+        assertEquals(0.4, Math.hypot(velocity.x(), velocity.z()), 1.0E-9);
+    }
+
+    @Test
+    void ascentHeadPitchIsLimitedToSteepUpwardCommands() {
+        assertEquals(0.0F, DragonFlightVisualMath.ascentPitch(new FlightVector(0.6, 0.5, 0.0)), 1.0E-6F);
+        assertEquals(0.0F, DragonFlightVisualMath.ascentPitch(new FlightVector(0.4, -0.6, 0.0)), 1.0E-6F);
+        assertEquals(
+            (float)-Math.toRadians(35.0),
+            DragonFlightVisualMath.ascentPitch(new FlightVector(0.4, 0.6, 0.0)),
+            1.0E-6F
+        );
+        assertEquals(
+            (float)-Math.toRadians(35.0),
+            DragonFlightVisualMath.ascentPitch(new FlightVector(0.0, 1.0, 0.0)),
+            1.0E-6F
+        );
+    }
+
+    @Test
     void divePassBeginsNearPlayerAndRecoveryWaitsForThePass() {
         assertFalse(TestDiveRoutine.shouldBeginPass(13.0));
         assertTrue(TestDiveRoutine.shouldBeginPass(12.0));

@@ -49,7 +49,7 @@ public final class DragonMovementController {
             return false;
         }
 
-        controller.clearRoutineState();
+        controller.clearRoutineState(dragon);
         controller.routine = routine;
         return true;
     }
@@ -65,28 +65,32 @@ public final class DragonMovementController {
             return false;
         }
 
-        controller.clearRoutineState();
+        controller.clearRoutineState(dragon);
         return true;
     }
 
     public Vec3 resolveTarget(EnderDragon dragon, DragonPhaseInstance phase, Vec3 vanillaTarget) {
         if (this.requiresVanillaControl(phase)) {
-            this.clearRoutineState();
+            this.clearRoutineState(dragon);
             return vanillaTarget;
         }
 
         if (this.routine == null) {
-            this.clearRoutineState();
+            this.clearRoutineState(dragon);
             return vanillaTarget;
         }
 
         FlightCommand command = this.routine.tick(dragon);
         if (command == null) {
-            this.clearRoutineState();
+            this.clearRoutineState(dragon);
             return vanillaTarget;
         }
 
         this.activeCommand = command;
+        float ascentPitch = command.usesDirectVelocity()
+            ? DragonFlightVisualMath.ascentPitch(toFlightVector(command.desiredVelocity()))
+            : 0.0F;
+        DragonFlightVisualState.setAscentPitch(dragon, ascentPitch);
         Vec3 alignedTarget = this.alignTargetToFlightTrend(dragon, command.target());
         if (command.usesDirectVelocity()) {
             this.smoothedTarget = alignedTarget;
@@ -194,13 +198,14 @@ public final class DragonMovementController {
         return vanillaAcceleration * (float)this.smoothedThrottle;
     }
 
-    private void clearRoutineState() {
+    private void clearRoutineState(EnderDragon dragon) {
         this.routine = null;
         this.activeCommand = null;
         this.smoothedTarget = null;
         this.smoothedThrottle = 1.0;
         this.throttleInitialized = false;
         this.turnResponsivenessInitialized = false;
+        DragonFlightVisualState.setAscentPitch(dragon, 0.0F);
     }
 
     private static boolean requiresVanillaControl(DragonPhaseInstance phase) {

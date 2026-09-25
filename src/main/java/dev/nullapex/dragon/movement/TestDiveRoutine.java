@@ -11,6 +11,8 @@ public final class TestDiveRoutine implements FlightRoutine {
     private static final int MAX_DIVE_TICKS = 180;
     private static final int MAX_RECOVERY_TICKS = 140;
     private static final double CLIMB_HEIGHT = 60.0;
+    private static final double CLIMB_HORIZONTAL_SPEED = 0.4;
+    private static final double CLIMB_HEADING_LOOK_AHEAD = 32.0;
     private static final double MAX_CLIMB_VERTICAL_SPEED = 0.6;
     private static final double CLIMB_TOP_TOLERANCE = 3.0;
     private static final double CLIMB_TOP_MAX_VERTICAL_SPEED = 0.18;
@@ -28,6 +30,7 @@ public final class TestDiveRoutine implements FlightRoutine {
     private Stage stage = Stage.CLIMB;
     private int stageTicks;
     private Vec3 climbTarget;
+    private Vec3 climbDirection;
     private Vec3 passDirection;
     private Vec3 recoveryTarget;
 
@@ -53,6 +56,7 @@ public final class TestDiveRoutine implements FlightRoutine {
     private FlightCommand tickClimb(EnderDragon dragon, Vec3 targetPosition) {
         if (this.climbTarget == null) {
             this.climbTarget = new Vec3(dragon.getX(), climbTargetY(dragon.getY()), dragon.getZ());
+            this.climbDirection = horizontalDirectionToTargetOrFacing(dragon, targetPosition);
         }
 
         if (shouldStartDive(dragon.getY(), this.climbTarget.y, dragon.getDeltaMovement().y)) {
@@ -62,7 +66,21 @@ public final class TestDiveRoutine implements FlightRoutine {
             return null;
         }
 
-        return this.directCommand(dragon, this.climbTarget, 0.0, 0.05, 0.32F, MAX_CLIMB_VERTICAL_SPEED);
+        Vec3 headingTarget = new Vec3(
+            dragon.getX() + this.climbDirection.x * CLIMB_HEADING_LOOK_AHEAD,
+            this.climbTarget.y,
+            dragon.getZ() + this.climbDirection.z * CLIMB_HEADING_LOOK_AHEAD
+        );
+        FlightVector desiredClimbVelocity = climbVelocity(
+            this.climbDirection.x, this.climbDirection.z, this.climbTarget.y - dragon.getY()
+        );
+        return FlightCommand.directVelocity(
+            headingTarget,
+            new Vec3(desiredClimbVelocity.x(), desiredClimbVelocity.y(), desiredClimbVelocity.z()),
+            MAX_DIRECT_SPEED,
+            0.05,
+            0.32F
+        );
     }
 
     private FlightCommand tickDive(EnderDragon dragon, Vec3 targetPosition) {
@@ -150,6 +168,19 @@ public final class TestDiveRoutine implements FlightRoutine {
     static double cappedVerticalSpeed(double verticalDistance, double maxVerticalSpeed) {
         return FlightMath.clamp(
             FlightMath.desiredVerticalSpeed(verticalDistance), -maxVerticalSpeed, maxVerticalSpeed
+        );
+    }
+
+    static FlightVector climbVelocity(double directionX, double directionZ, double verticalDistance) {
+        double horizontalLength = Math.hypot(directionX, directionZ);
+        if (horizontalLength < 1.0E-9) {
+            return new FlightVector(0.0, cappedVerticalSpeed(verticalDistance, MAX_CLIMB_VERTICAL_SPEED), 0.0);
+        }
+
+        return new FlightVector(
+            directionX / horizontalLength * CLIMB_HORIZONTAL_SPEED,
+            cappedVerticalSpeed(verticalDistance, MAX_CLIMB_VERTICAL_SPEED),
+            directionZ / horizontalLength * CLIMB_HORIZONTAL_SPEED
         );
     }
 
