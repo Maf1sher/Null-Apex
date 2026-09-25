@@ -6,6 +6,7 @@ import net.minecraft.world.phys.Vec3;
 
 /** Temporary movement-only test routine. Delete this class and its command to remove the demo. */
 public final class TestDiveRoutine implements FlightRoutine {
+    private static final double MAX_DIRECT_SPEED = 1.8;
     private static final int MAX_CLIMB_TICKS = 600;
     private static final int MAX_DIVE_TICKS = 180;
     private static final int MAX_RECOVERY_TICKS = 140;
@@ -52,7 +53,7 @@ public final class TestDiveRoutine implements FlightRoutine {
             return null;
         }
 
-        return new FlightCommand(this.climbTarget, 5.0F, 0.32F, 0.0);
+        return this.directCommand(dragon, this.climbTarget, 0.0, 0.05, 0.32F);
     }
 
     private FlightCommand tickDive(EnderDragon dragon, Vec3 targetPosition) {
@@ -73,7 +74,13 @@ public final class TestDiveRoutine implements FlightRoutine {
         float verticalAcceleration = lerp(5.0F, 8.0F, progress);
         float turnResponsiveness = lerp(0.35F, 0.50F, progress);
         double horizontalSpeed = lerp(1.0, 0.2, progress);
-        return new FlightCommand(targetPosition.add(0.0, 1.0, 0.0), verticalAcceleration, turnResponsiveness, horizontalSpeed);
+        return this.directCommand(
+            dragon,
+            targetPosition.add(0.0, 1.0, 0.0),
+            horizontalSpeed,
+            verticalAcceleration * 0.01,
+            turnResponsiveness
+        );
     }
 
     private FlightCommand tickRecover(EnderDragon dragon, Vec3 targetPosition) {
@@ -86,7 +93,29 @@ public final class TestDiveRoutine implements FlightRoutine {
         float verticalAcceleration = lerp(8.0F, 1.5F, progress);
         double horizontalSpeed = lerp(1.0, 0.75, progress);
         Vec3 recoveryTarget = targetPosition.add(this.recoveryOffset);
-        return new FlightCommand(recoveryTarget, verticalAcceleration, 0.35F, horizontalSpeed);
+        return this.directCommand(dragon, recoveryTarget, horizontalSpeed, verticalAcceleration * 0.01, 0.35F);
+    }
+
+    private FlightCommand directCommand(
+        EnderDragon dragon,
+        Vec3 target,
+        double horizontalSpeed,
+        double maxAcceleration,
+        float turnResponsiveness
+    ) {
+        Vec3 offset = target.subtract(dragon.position());
+        Vec3 horizontalOffset = offset.multiply(1.0, 0.0, 1.0);
+        Vec3 desiredHorizontalVelocity = horizontalOffset.lengthSqr() < 1.0E-9
+            ? Vec3.ZERO
+            : horizontalOffset.normalize().scale(horizontalSpeed);
+        Vec3 desiredVelocity = new Vec3(
+            desiredHorizontalVelocity.x,
+            FlightMath.desiredVerticalSpeed(offset.y),
+            desiredHorizontalVelocity.z
+        );
+        return FlightCommand.directVelocity(
+            target, desiredVelocity, MAX_DIRECT_SPEED, maxAcceleration, turnResponsiveness
+        );
     }
 
     static double climbTargetY(double startY) {

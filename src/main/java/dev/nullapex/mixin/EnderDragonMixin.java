@@ -57,8 +57,12 @@ abstract class EnderDragonMixin {
         )
     )
     private void nullApex$adjustHorizontalAcceleration(EnderDragon dragon, float acceleration, Vec3 direction) {
-        float controlledAcceleration = DragonMovementController.forDragon(dragon)
-            .adjustHorizontalAcceleration(dragon, acceleration);
+        DragonMovementController controller = DragonMovementController.forDragon(dragon);
+        if (controller.applyDirectVelocity(dragon)) {
+            return;
+        }
+
+        float controlledAcceleration = controller.adjustHorizontalAcceleration(dragon, acceleration);
         dragon.moveRelative(controlledAcceleration, direction);
     }
 }

@@ -16,6 +16,7 @@ public final class DragonMovementController {
     private static final Map<EnderDragon, DragonMovementController> CONTROLLERS = new WeakHashMap<>();
     private static final double CUSTOM_TARGET_STEP = 4.0;
     private static final float MAX_TURN_RESPONSIVENESS = 0.50F;
+    private static final float MAX_DIRECT_TURN_RESPONSIVENESS = 1.0F;
     private static final double VERTICAL_ACCELERATION_SCALE = 0.01;
     private static final float TURN_CHANGE_PER_TICK = 0.04F;
     private static final double THROTTLE_CHANGE_PER_TICK = 0.12;
@@ -87,7 +88,9 @@ public final class DragonMovementController {
 
         this.activeCommand = command;
         Vec3 alignedTarget = this.alignTargetToFlightTrend(dragon, command.target());
-        if (this.smoothedTarget == null) {
+        if (command.usesDirectVelocity()) {
+            this.smoothedTarget = alignedTarget;
+        } else if (this.smoothedTarget == null) {
             this.smoothedTarget = alignedTarget;
         } else {
             Vec3 difference = alignedTarget.subtract(this.smoothedTarget);
@@ -102,6 +105,9 @@ public final class DragonMovementController {
     public Vec3 adjustVerticalMovement(EnderDragon dragon, Vec3 vanillaMovement) {
         if (this.routine == null || this.activeCommand == null || this.smoothedTarget == null) {
             return vanillaMovement;
+        }
+        if (this.activeCommand.usesDirectVelocity()) {
+            return dragon.getDeltaMovement();
         }
 
         double maxAcceleration = FlightMath.clamp(this.activeCommand.verticalAcceleration(), 0.0, 8.0)
@@ -120,7 +126,12 @@ public final class DragonMovementController {
             return vanillaValue;
         }
 
-        float target = (float)FlightMath.clamp(this.activeCommand.turnResponsiveness(), 0.0, MAX_TURN_RESPONSIVENESS);
+        float maxTurnResponsiveness = this.activeCommand.usesDirectVelocity()
+            ? MAX_DIRECT_TURN_RESPONSIVENESS
+            : MAX_TURN_RESPONSIVENESS;
+        float target = (float)FlightMath.clamp(
+            this.activeCommand.turnResponsiveness(), 0.0, maxTurnResponsiveness
+        );
         if (!this.turnResponsivenessInitialized) {
             this.smoothedTurnResponsiveness = target;
             this.turnResponsivenessInitialized = true;
@@ -130,6 +141,23 @@ public final class DragonMovementController {
             );
         }
         return this.smoothedTurnResponsiveness;
+    }
+
+    /** Applies a direct velocity request before vanilla collision-resolved movement and drag. */
+    public boolean applyDirectVelocity(EnderDragon dragon) {
+        if (this.routine == null || this.activeCommand == null || !this.activeCommand.usesDirectVelocity()) {
+            return false;
+        }
+
+        FlightVector desiredVelocity = FlightMath.clampLength(
+            toFlightVector(this.activeCommand.desiredVelocity()), this.activeCommand.maxSpeed()
+        );
+        FlightVector limitedPostDragVelocity = FlightMath.approachVector(
+            toFlightVector(dragon.getDeltaMovement()), desiredVelocity, this.activeCommand.maxAcceleration()
+        );
+        FlightVector preDragVelocity = FlightMath.compensateForDragonDrag(limitedPostDragVelocity, dragon.getYRot());
+        dragon.setDeltaMovement(toVec3(preDragVelocity));
+        return true;
     }
 
     public float adjustHorizontalAcceleration(EnderDragon dragon, float vanillaAcceleration) {
@@ -189,5 +217,13 @@ public final class DragonMovementController {
             dragon.getY(), target.y, dragon.getDeltaMovement().y, recentYChange
         );
         return new Vec3(target.x, alignedY, target.z);
+    }
+
+    private static FlightVector toFlightVector(Vec3 vector) {
+        return new FlightVector(vector.x, vector.y, vector.z);
+    }
+
+    private static Vec3 toVec3(FlightVector vector) {
+        return new Vec3(vector.x(), vector.y(), vector.z());
     }
 }

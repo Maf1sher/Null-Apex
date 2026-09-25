@@ -14,6 +14,42 @@ class FlightMathTest {
     }
 
     @Test
+    void vectorApproachLimitsTotalVelocityChange() {
+        FlightVector approached = FlightMath.approachVector(FlightVector.ZERO, new FlightVector(3.0, 4.0, 0.0), 2.0);
+
+        assertEquals(1.2, approached.x(), 1.0E-9);
+        assertEquals(1.6, approached.y(), 1.0E-9);
+        assertEquals(2.0, approached.length(), 1.0E-9);
+    }
+
+    @Test
+    void vectorLengthClampPreservesDirectionAndCapsSpeed() {
+        FlightVector clamped = FlightMath.clampLength(new FlightVector(3.0, 4.0, 0.0), 2.5);
+
+        assertEquals(1.5, clamped.x(), 1.0E-9);
+        assertEquals(2.0, clamped.y(), 1.0E-9);
+        assertEquals(2.5, clamped.length(), 1.0E-9);
+    }
+
+    @Test
+    void directVelocityCompensatesForDragonDrag() {
+        FlightVector desiredVelocity = new FlightVector(0.45, 0.6, -0.8);
+        FlightVector preDragVelocity = FlightMath.compensateForDragonDrag(desiredVelocity, 37.0F);
+        FlightVector postDragVelocity = FlightMath.applyDragonDrag(preDragVelocity, 37.0F);
+
+        assertEquals(desiredVelocity.x(), postDragVelocity.x(), 1.0E-8);
+        assertEquals(desiredVelocity.y(), postDragVelocity.y(), 1.0E-8);
+        assertEquals(desiredVelocity.z(), postDragVelocity.z(), 1.0E-8);
+
+        FlightVector currentVelocity = new FlightVector(0.0, 0.0, 0.0);
+        FlightVector limitedVelocity = FlightMath.approachVector(currentVelocity, desiredVelocity, 0.1);
+        FlightVector appliedVelocity = FlightMath.applyDragonDrag(
+            FlightMath.compensateForDragonDrag(limitedVelocity, 37.0F), 37.0F
+        );
+        assertEquals(0.1, appliedVelocity.length(), 1.0E-8);
+    }
+
+    @Test
     void verticalVelocityControlAppliesAccelerationEvenForDistantTargets() {
         double velocityBeforeDrag = FlightMath.verticalVelocityBeforeDrag(0.0, 100.0, 0.018);
 
