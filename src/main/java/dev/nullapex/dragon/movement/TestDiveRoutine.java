@@ -11,16 +11,25 @@ public final class TestDiveRoutine implements FlightRoutine {
     private static final int MAX_DIVE_TICKS = 180;
     private static final int MAX_RECOVERY_TICKS = 140;
     private static final double CLIMB_HEIGHT = 60.0;
-    private static final double DIVE_END_HEIGHT = 2.0;
-    private static final double DIVE_END_HORIZONTAL_DISTANCE = 6.0;
-    private static final double DIVE_PASSED_TARGET_HEIGHT = -2.0;
+    private static final double MAX_CLIMB_VERTICAL_SPEED = 0.6;
+    private static final double CLIMB_TOP_TOLERANCE = 3.0;
+    private static final double CLIMB_TOP_MAX_VERTICAL_SPEED = 0.18;
+    private static final double DIVE_PASS_START_HEIGHT = 12.0;
+    private static final double DIVE_PASS_MAX_HEIGHT = 8.0;
+    private static final double DIVE_PASS_CLEARANCE = 8.0;
+    private static final double PASS_TARGET_MIN_LEAD = 16.0;
+    private static final double PASS_TARGET_REMAINING_LEAD = 12.0;
+    private static final double DIVE_HORIZONTAL_SPEED = 1.0;
+    private static final double RECOVERY_FORWARD_DISTANCE = 32.0;
+    private static final double RECOVERY_RISE = 6.0;
+    private static final double MAX_RECOVERY_VERTICAL_SPEED = 0.35;
 
     private final Player target;
     private Stage stage = Stage.CLIMB;
     private int stageTicks;
     private Vec3 climbTarget;
-    private Vec3 recoveryOffset;
-    private boolean reachedDiveTargetHeight;
+    private Vec3 passDirection;
+    private Vec3 recoveryTarget;
 
     public TestDiveRoutine(Player target) {
         this.target = target;
@@ -37,7 +46,7 @@ public final class TestDiveRoutine implements FlightRoutine {
         return switch (this.stage) {
             case CLIMB -> this.tickClimb(dragon, targetPosition);
             case DIVE -> this.tickDive(dragon, targetPosition);
-            case RECOVER -> this.tickRecover(dragon, targetPosition);
+            case RECOVER -> this.tickRecover(dragon);
         };
     }
 
@@ -46,54 +55,69 @@ public final class TestDiveRoutine implements FlightRoutine {
             this.climbTarget = new Vec3(dragon.getX(), climbTargetY(dragon.getY()), dragon.getZ());
         }
 
-        if (dragon.getY() >= this.climbTarget.y - 1.0) {
+        if (shouldStartDive(dragon.getY(), this.climbTarget.y, dragon.getDeltaMovement().y)) {
             this.changeStage(Stage.DIVE);
             return this.tickDive(dragon, targetPosition);
         } else if (this.stageTicks > MAX_CLIMB_TICKS) {
             return null;
         }
 
-        return this.directCommand(dragon, this.climbTarget, 0.0, 0.05, 0.32F);
+        return this.directCommand(dragon, this.climbTarget, 0.0, 0.05, 0.32F, MAX_CLIMB_VERTICAL_SPEED);
     }
 
     private FlightCommand tickDive(EnderDragon dragon, Vec3 targetPosition) {
         double horizontalDistance = dragon.position().subtract(targetPosition).horizontalDistance();
-        if (dragon.getY() >= targetPosition.y + DIVE_END_HEIGHT) {
-            this.reachedDiveTargetHeight = true;
+        double verticalOffset = dragon.getY() - targetPosition.y;
+
+        if (this.passDirection == null && shouldBeginPass(verticalOffset)) {
+            this.passDirection = horizontalDirectionToTargetOrFacing(dragon, targetPosition);
         }
 
-        if (shouldRecoverFromDive(
-            dragon.getY(), targetPosition.y, horizontalDistance, this.stageTicks, this.reachedDiveTargetHeight
-        )) {
+        double alongTrackDistance = this.passDirection == null
+            ? Double.NEGATIVE_INFINITY
+            : alongTrackDistance(dragon.position(), targetPosition, this.passDirection);
+        if (shouldBeginRecovery(alongTrackDistance, verticalOffset, this.stageTicks)) {
             this.beginRecovery(dragon);
-            return this.tickRecover(dragon, targetPosition);
+            return this.tickRecover(dragon);
         }
 
         float approach = (float)FlightMath.clamp(1.0 - horizontalDistance / 40.0, 0.0, 1.0);
         float progress = FlightMath.smootherStep(approach);
         float verticalAcceleration = lerp(5.0F, 8.0F, progress);
         float turnResponsiveness = lerp(0.35F, 0.50F, progress);
-        double horizontalSpeed = lerp(1.0, 0.2, progress);
+        Vec3 headingTarget = targetPosition.add(0.0, 1.0, 0.0);
+        if (this.passDirection != null) {
+            double leadDistance = passTargetLeadDistance(alongTrackDistance);
+            headingTarget = targetPosition.add(this.passDirection.scale(leadDistance)).add(0.0, 1.0, 0.0);
+        }
         return this.directCommand(
             dragon,
-            targetPosition.add(0.0, 1.0, 0.0),
-            horizontalSpeed,
+            headingTarget,
+            DIVE_HORIZONTAL_SPEED,
             verticalAcceleration * 0.01,
-            turnResponsiveness
+            turnResponsiveness,
+            1.4
         );
     }
 
-    private FlightCommand tickRecover(EnderDragon dragon, Vec3 targetPosition) {
+    private FlightCommand tickRecover(EnderDragon dragon) {
         if (this.stageTicks > MAX_RECOVERY_TICKS
-            || dragon.position().distanceToSqr(targetPosition.add(this.recoveryOffset)) <= 144.0) {
+            || (dragon.position().distanceToSqr(this.recoveryTarget) <= 144.0
+                && Math.abs(dragon.getDeltaMovement().y) <= 0.25)) {
             return null;
         }
 
         float progress = FlightMath.smootherStep(this.stageTicks / 36.0F);
         float verticalAcceleration = lerp(8.0F, 1.5F, progress);
         double horizontalSpeed = lerp(1.0, 0.75, progress);
-        Vec3 recoveryTarget = targetPosition.add(this.recoveryOffset);
-        return this.directCommand(dragon, recoveryTarget, horizontalSpeed, verticalAcceleration * 0.01, 0.35F);
+        return this.directCommand(
+            dragon,
+            this.recoveryTarget,
+            horizontalSpeed,
+            verticalAcceleration * 0.01,
+            0.35F,
+            MAX_RECOVERY_VERTICAL_SPEED
+        );
     }
 
     private FlightCommand directCommand(
@@ -101,7 +125,8 @@ public final class TestDiveRoutine implements FlightRoutine {
         Vec3 target,
         double horizontalSpeed,
         double maxAcceleration,
-        float turnResponsiveness
+        float turnResponsiveness,
+        double maxVerticalSpeed
     ) {
         Vec3 offset = target.subtract(dragon.position());
         Vec3 horizontalOffset = offset.multiply(1.0, 0.0, 1.0);
@@ -110,7 +135,7 @@ public final class TestDiveRoutine implements FlightRoutine {
             : horizontalOffset.normalize().scale(horizontalSpeed);
         Vec3 desiredVelocity = new Vec3(
             desiredHorizontalVelocity.x,
-            FlightMath.desiredVerticalSpeed(offset.y),
+            cappedVerticalSpeed(offset.y, maxVerticalSpeed),
             desiredHorizontalVelocity.z
         );
         return FlightCommand.directVelocity(
@@ -122,28 +147,63 @@ public final class TestDiveRoutine implements FlightRoutine {
         return startY + CLIMB_HEIGHT;
     }
 
-    static boolean shouldRecoverFromDive(
-        double dragonY,
-        double playerY,
-        double horizontalDistance,
-        int stageTicks,
-        boolean reachedDiveTargetHeight
-    ) {
+    static double cappedVerticalSpeed(double verticalDistance, double maxVerticalSpeed) {
+        return FlightMath.clamp(
+            FlightMath.desiredVerticalSpeed(verticalDistance), -maxVerticalSpeed, maxVerticalSpeed
+        );
+    }
+
+    static boolean shouldStartDive(double dragonY, double climbTargetY, double verticalVelocity) {
+        return Math.abs(dragonY - climbTargetY) <= CLIMB_TOP_TOLERANCE
+            && Math.abs(verticalVelocity) <= CLIMB_TOP_MAX_VERTICAL_SPEED;
+    }
+
+    static boolean shouldBeginPass(double verticalOffset) {
+        return verticalOffset <= DIVE_PASS_START_HEIGHT;
+    }
+
+    static boolean shouldBeginRecovery(double alongTrackDistance, double verticalOffset, int stageTicks) {
         return stageTicks > MAX_DIVE_TICKS
-            || (dragonY <= playerY + DIVE_END_HEIGHT && horizontalDistance <= DIVE_END_HORIZONTAL_DISTANCE)
-            || (reachedDiveTargetHeight && dragonY <= playerY + DIVE_PASSED_TARGET_HEIGHT);
+            || (alongTrackDistance >= DIVE_PASS_CLEARANCE && verticalOffset <= DIVE_PASS_MAX_HEIGHT);
+    }
+
+    static double passTargetLeadDistance(double alongTrackDistance) {
+        return Math.max(PASS_TARGET_MIN_LEAD, alongTrackDistance + PASS_TARGET_REMAINING_LEAD);
+    }
+
+    static double recoveryTargetY(double dragonY) {
+        return dragonY + RECOVERY_RISE;
+    }
+
+    private static double alongTrackDistance(Vec3 dragonPosition, Vec3 targetPosition, Vec3 direction) {
+        Vec3 relativePosition = dragonPosition.subtract(targetPosition);
+        return relativePosition.x * direction.x + relativePosition.z * direction.z;
+    }
+
+    private static Vec3 horizontalDirectionToTargetOrFacing(EnderDragon dragon, Vec3 targetPosition) {
+        Vec3 direction = targetPosition.subtract(dragon.position()).multiply(1.0, 0.0, 1.0);
+        if (direction.lengthSqr() >= 1.0E-4) {
+            return direction.normalize();
+        }
+
+        direction = dragon.getDeltaMovement().multiply(1.0, 0.0, 1.0);
+        if (direction.lengthSqr() >= 1.0E-4) {
+            return direction.normalize();
+        }
+
+        float yaw = dragon.getYRot() * ((float)Math.PI / 180.0F);
+        return new Vec3(Math.sin(yaw), 0.0, -Math.cos(yaw));
     }
 
     private void beginRecovery(EnderDragon dragon) {
-        Vec3 horizontalDirection = dragon.getDeltaMovement().multiply(1.0, 0.0, 1.0);
-        if (horizontalDirection.lengthSqr() < 1.0E-4) {
-            float yaw = dragon.getYRot() * ((float)Math.PI / 180.0F);
-            horizontalDirection = new Vec3(Math.sin(yaw), 0.0, -Math.cos(yaw));
-        } else {
-            horizontalDirection = horizontalDirection.normalize();
-        }
-
-        this.recoveryOffset = horizontalDirection.scale(42.0).add(0.0, 34.0, 0.0);
+        Vec3 horizontalDirection = this.passDirection == null
+            ? horizontalDirectionToTargetOrFacing(dragon, dragon.position().add(dragon.getDeltaMovement()))
+            : this.passDirection;
+        this.recoveryTarget = new Vec3(
+            dragon.getX() + horizontalDirection.x * RECOVERY_FORWARD_DISTANCE,
+            recoveryTargetY(dragon.getY()),
+            dragon.getZ() + horizontalDirection.z * RECOVERY_FORWARD_DISTANCE
+        );
         this.changeStage(Stage.RECOVER);
     }
 

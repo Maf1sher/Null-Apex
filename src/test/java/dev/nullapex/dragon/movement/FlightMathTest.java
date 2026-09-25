@@ -99,13 +99,29 @@ class FlightMathTest {
     }
 
     @Test
-    void diveDoesNotRecoverSevenBlocksAboveOrFarFromThePlayer() {
-        assertFalse(TestDiveRoutine.shouldRecoverFromDive(71.0, 64.0, 20.0, 80, true));
-        assertFalse(TestDiveRoutine.shouldRecoverFromDive(66.0, 64.0, 8.0, 80, true));
-        assertTrue(TestDiveRoutine.shouldRecoverFromDive(66.0, 64.0, 5.0, 80, true));
-        assertTrue(TestDiveRoutine.shouldRecoverFromDive(61.0, 64.0, 20.0, 80, true));
-        assertFalse(TestDiveRoutine.shouldRecoverFromDive(61.0, 100.0, 20.0, 80, false));
-        assertTrue(TestDiveRoutine.shouldRecoverFromDive(80.0, 64.0, 20.0, 181, false));
+    void climbCapsVerticalSpeedAndWaitsForTheDragonToLevelNearTheTarget() {
+        assertEquals(0.6, TestDiveRoutine.cappedVerticalSpeed(100.0, 0.6), 1.0E-9);
+        assertEquals(-0.6, TestDiveRoutine.cappedVerticalSpeed(-100.0, 0.6), 1.0E-9);
+        assertFalse(TestDiveRoutine.shouldStartDive(119.0, 124.0, 0.0));
+        assertFalse(TestDiveRoutine.shouldStartDive(123.0, 124.0, 0.3));
+        assertTrue(TestDiveRoutine.shouldStartDive(123.0, 124.0, 0.1));
+    }
+
+    @Test
+    void divePassBeginsNearPlayerAndRecoveryWaitsForThePass() {
+        assertFalse(TestDiveRoutine.shouldBeginPass(13.0));
+        assertTrue(TestDiveRoutine.shouldBeginPass(12.0));
+        assertFalse(TestDiveRoutine.shouldBeginRecovery(10.0, 9.0, 80));
+        assertFalse(TestDiveRoutine.shouldBeginRecovery(7.0, 2.0, 80));
+        assertTrue(TestDiveRoutine.shouldBeginRecovery(8.0, 8.0, 80));
+        assertTrue(TestDiveRoutine.shouldBeginRecovery(0.0, 30.0, 181));
+    }
+
+    @Test
+    void passTargetStaysAheadAndRecoveryOnlyRisesSlightlyFromThePassHeight() {
+        assertEquals(16.0, TestDiveRoutine.passTargetLeadDistance(-50.0), 1.0E-9);
+        assertEquals(22.0, TestDiveRoutine.passTargetLeadDistance(10.0), 1.0E-9);
+        assertEquals(70.0, TestDiveRoutine.recoveryTargetY(64.0), 1.0E-9);
     }
 
     @Test
