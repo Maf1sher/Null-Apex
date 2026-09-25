@@ -135,6 +135,21 @@ class FlightMathTest {
     }
 
     @Test
+    void customAscentCapsFinalWingFlapRateWithoutChangingVanillaOrDiveRates() {
+        double vanillaExponent = DragonFlightVisualMath.limitWingFlapExponent(1.8, 0.0, false);
+        double verticalAscentExponent = DragonFlightVisualMath.limitWingFlapExponent(1.8, 0.0, true);
+        double diagonalAscentExponent = DragonFlightVisualMath.limitWingFlapExponent(1.8, 0.4, true);
+        double slowAscentExponent = DragonFlightVisualMath.limitWingFlapExponent(0.2, 0.4, true);
+        double diveExponent = DragonFlightVisualMath.limitWingFlapExponent(-1.8, 0.0, true);
+
+        assertEquals(1.8, vanillaExponent, 1.0E-9);
+        assertEquals(0.06, 0.2 * Math.pow(2.0, verticalAscentExponent), 1.0E-9);
+        assertEquals(0.06, 0.2 / 5.0 * Math.pow(2.0, diagonalAscentExponent), 1.0E-9);
+        assertEquals(0.2, slowAscentExponent, 1.0E-9);
+        assertEquals(-1.8, diveExponent, 1.0E-9);
+    }
+
+    @Test
     void flightPitchFollowsUpwardAndDownwardVelocityAndIgnoresStillVectors() {
         assertEquals(
             56.309932F,

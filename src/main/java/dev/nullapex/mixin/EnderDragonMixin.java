@@ -2,6 +2,7 @@ package dev.nullapex.mixin;
 
 import dev.nullapex.dragon.movement.DragonMovementController;
 import dev.nullapex.dragon.movement.DragonFlightHitboxAlignment;
+import dev.nullapex.dragon.movement.DragonFlightVisualMath;
 import dev.nullapex.dragon.movement.DragonFlightVisualState;
 import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
 import net.minecraft.world.entity.boss.enderdragon.phases.DragonPhaseInstance;
@@ -15,6 +16,24 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(EnderDragon.class)
 abstract class EnderDragonMixin {
+    @ModifyArg(
+        method = "aiStep",
+        at = @At(
+            value = "INVOKE",
+            target = "Ljava/lang/Math;pow(DD)D"
+        ),
+        index = 1
+    )
+    private double nullApex$limitAscentWingFlapSpeed(double verticalSpeed) {
+        EnderDragon dragon = (EnderDragon)(Object)this;
+        boolean customDirectFlight = DragonFlightVisualState.flightPitchDegrees(dragon) != null;
+        return DragonFlightVisualMath.limitWingFlapExponent(
+            verticalSpeed,
+            dragon.getDeltaMovement().horizontalDistance(),
+            customDirectFlight
+        );
+    }
+
     @Inject(method = "aiStep", at = @At("TAIL"))
     private void nullApex$alignCustomFlightHitboxes(CallbackInfo callbackInfo) {
         EnderDragon dragon = (EnderDragon)(Object)this;
