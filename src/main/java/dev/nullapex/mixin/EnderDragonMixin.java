@@ -1,8 +1,8 @@
 package dev.nullapex.mixin;
 
-import dev.nullapex.dragon.movement.DragonMovementController;
 import dev.nullapex.dragon.movement.DragonFlightVisualMath;
 import dev.nullapex.dragon.movement.DragonFlightVisualState;
+import dev.nullapex.dragon.movement.DragonMovementController;
 import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
 import net.minecraft.world.entity.boss.enderdragon.phases.DragonPhaseInstance;
 import net.minecraft.world.phys.Vec3;
@@ -40,7 +40,7 @@ abstract class EnderDragonMixin {
     )
     private Vec3 nullApex$resolveFlightTarget(DragonPhaseInstance phase) {
         EnderDragon dragon = (EnderDragon)(Object)this;
-        return DragonMovementController.forDragon(dragon).resolveTarget(dragon, phase, phase.getFlyTargetLocation());
+        return DragonMovementController.mixinResolveTarget(dragon, phase, phase.getFlyTargetLocation());
     }
 
     @ModifyArg(
@@ -54,7 +54,7 @@ abstract class EnderDragonMixin {
     )
     private Vec3 nullApex$adjustVerticalMovement(Vec3 movement) {
         EnderDragon dragon = (EnderDragon)(Object)this;
-        return DragonMovementController.forDragon(dragon).adjustVerticalMovement(dragon, movement);
+        return DragonMovementController.mixinAdjustVerticalMovement(dragon, movement);
     }
 
     @Redirect(
@@ -66,7 +66,7 @@ abstract class EnderDragonMixin {
     )
     private float nullApex$resolveTurnResponsiveness(DragonPhaseInstance phase) {
         float vanillaValue = phase.getTurnSpeed();
-        return DragonMovementController.forDragon((EnderDragon)(Object)this).resolveTurnResponsiveness(vanillaValue);
+        return DragonMovementController.mixinResolveTurnResponsiveness((EnderDragon)(Object)this, vanillaValue);
     }
 
     @Redirect(
@@ -77,12 +77,11 @@ abstract class EnderDragonMixin {
         )
     )
     private void nullApex$adjustHorizontalAcceleration(EnderDragon dragon, float acceleration, Vec3 direction) {
-        DragonMovementController controller = DragonMovementController.forDragon(dragon);
-        if (controller.applyDirectVelocity(dragon)) {
+        if (DragonMovementController.mixinApplyDirectVelocity(dragon)) {
             return;
         }
 
-        float controlledAcceleration = controller.adjustHorizontalAcceleration(dragon, acceleration);
+        float controlledAcceleration = DragonMovementController.mixinAdjustHorizontalAcceleration(dragon, acceleration);
         dragon.moveRelative(controlledAcceleration, direction);
     }
 }

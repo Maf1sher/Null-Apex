@@ -9,7 +9,7 @@ import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.entity.PartEntity;
 
 /** Operator test flight that climbs vertically and dives until its head reaches the ground. */
-public final class VerticalImpactRoutine implements FlightRoutine {
+public final class VerticalImpactRoutine implements ManagedFlightRoutine {
     private static final double CLIMB_HEIGHT = 80.0;
     private static final double MIN_CLIMB_HEIGHT = 24.0;
     private static final double WORLD_CEILING_MARGIN = 16.0;
@@ -51,14 +51,22 @@ public final class VerticalImpactRoutine implements FlightRoutine {
     }
 
     @Override
-    public FlightCommand tick(EnderDragon dragon) {
+    public FlightRoutineResult tickResult(EnderDragon dragon) {
         this.stageTicks++;
-        return switch (this.stage) {
+        FlightCommand command = switch (this.stage) {
             case ALIGN -> this.tickAlign(dragon);
             case CLIMB -> this.tickClimb(dragon);
             case TURN -> this.tickTurn(dragon);
             case DIVE -> this.tickDive(dragon);
         };
+        return command == null ? FlightRoutineResult.complete() : FlightRoutineResult.command(command);
+    }
+
+    @Override
+    public boolean canContinueDuring(DragonMovementPhase phase) {
+        return phase == DragonMovementPhase.LANDING_APPROACH
+            || phase == DragonMovementPhase.LANDING
+            || phase == DragonMovementPhase.SITTING;
     }
 
     private FlightCommand tickAlign(EnderDragon dragon) {

@@ -19,6 +19,7 @@ public record FlightCommand(
 
     public FlightCommand {
         Objects.requireNonNull(target, "target");
+        FlightCommandValidation.requireFiniteTarget(target.x, target.y, target.z);
         if (!Float.isFinite(verticalAcceleration) || verticalAcceleration < 0.0F) {
             throw new IllegalArgumentException("verticalAcceleration must be finite and non-negative");
         }
@@ -34,9 +35,9 @@ public record FlightCommand(
                 throw new IllegalArgumentException("direct velocity limits require a desired velocity");
             }
         } else {
-            if (!Double.isFinite(desiredVelocity.x) || !Double.isFinite(desiredVelocity.y) || !Double.isFinite(desiredVelocity.z)) {
-                throw new IllegalArgumentException("desiredVelocity components must be finite");
-            }
+            FlightCommandValidation.requireFiniteVelocity(
+                desiredVelocity.x, desiredVelocity.y, desiredVelocity.z
+            );
             if (verticalAcceleration != 0.0F || horizontalCruiseSpeed != null) {
                 throw new IllegalArgumentException("direct velocity commands cannot also request target-mode acceleration");
             }
@@ -61,7 +62,10 @@ public record FlightCommand(
         double maxAcceleration,
         float turnResponsiveness
     ) {
-        return new FlightCommand(headingTarget, 0.0F, turnResponsiveness, null, desiredVelocity, maxSpeed, maxAcceleration);
+        Objects.requireNonNull(desiredVelocity, "desiredVelocity");
+        return new FlightCommand(
+            headingTarget, 0.0F, turnResponsiveness, null, desiredVelocity, maxSpeed, maxAcceleration
+        );
     }
 
     public boolean usesDirectVelocity() {

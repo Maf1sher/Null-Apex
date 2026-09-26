@@ -7,12 +7,15 @@ import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
 import net.minecraft.world.entity.boss.enderdragon.phases.DragonPhaseInstance;
 import net.minecraft.world.entity.boss.enderdragon.phases.EnderDragonPhase;
 import net.minecraft.world.phys.Vec3;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Per-dragon steering state for custom flight routines. Vanilla flight remains untouched whenever
  * no routine is active.
  */
 public final class DragonMovementController {
+    private static final Logger LOGGER = LoggerFactory.getLogger("null_apex");
     private static final Map<EnderDragon, DragonMovementController> CONTROLLERS = new WeakHashMap<>();
     private static final double CUSTOM_TARGET_STEP = 4.0;
     private static final float MAX_TURN_RESPONSIVENESS = 0.50F;
@@ -33,60 +36,136 @@ public final class DragonMovementController {
     private DragonMovementController() {
     }
 
-    public static synchronized DragonMovementController forDragon(EnderDragon dragon) {
+    static synchronized DragonMovementController forDragon(EnderDragon dragon) {
+        Objects.requireNonNull(dragon, "dragon");
         return CONTROLLERS.computeIfAbsent(dragon, ignored -> new DragonMovementController());
     }
 
-    public static synchronized boolean startRoutine(EnderDragon dragon, FlightRoutine routine) {
+    private static synchronized DragonMovementController existingForDragon(EnderDragon dragon) {
+        return CONTROLLERS.get(dragon);
+    }
+
+    /** Starts a routine without replacing an existing routine. */
+    public static boolean startRoutine(EnderDragon dragon, FlightRoutine routine) {
+        return tryStartRoutine(dragon, routine) == RoutineStartResult.STARTED;
+    }
+
+    /** Starts a routine and reports why it was rejected, if it could not be started. */
+    public static RoutineStartResult tryStartRoutine(EnderDragon dragon, FlightRoutine routine) {
+        Objects.requireNonNull(dragon, "dragon");
         Objects.requireNonNull(routine, "routine");
+
+        if (dragon.level().isClientSide) {
+            return RoutineStartResult.CLIENT_SIDE;
+        }
+        if (dragon.isDeadOrDying()) {
+            return RoutineStartResult.DRAGON_DEAD;
+        }
+
         DragonPhaseInstance phase = dragon.getPhaseManager().getCurrentPhase();
-        if (dragon.level().isClientSide || dragon.isDeadOrDying() || requiresVanillaControl(phase)) {
-            return false;
+        if (requiresVanillaControl(phase)) {
+            return RoutineStartResult.PROTECTED_PHASE;
         }
 
         DragonMovementController controller = forDragon(dragon);
         if (controller.routine != null) {
-            return false;
+            return RoutineStartResult.ALREADY_ACTIVE;
         }
 
-        controller.clearRoutineState(dragon);
+        controller.clearMovementState(dragon);
         controller.routine = routine;
-        return true;
+        try {
+            routine.onStart(dragon);
+        } catch (RuntimeException exception) {
+            controller.finishRoutine(dragon, FlightRoutineEndReason.FAILED);
+            LOGGER.error("Dragon flight routine failed during initialization", exception);
+            return RoutineStartResult.INITIALIZATION_FAILED;
+        }
+        return RoutineStartResult.STARTED;
     }
 
-    public static synchronized boolean stopRoutine(EnderDragon dragon) {
+    public static boolean stopRoutine(EnderDragon dragon) {
         Objects.requireNonNull(dragon, "dragon");
         if (dragon.level().isClientSide) {
             return false;
         }
 
-        DragonMovementController controller = CONTROLLERS.get(dragon);
+        DragonMovementController controller = existingForDragon(dragon);
         if (controller == null || controller.routine == null) {
             return false;
         }
 
-        controller.clearRoutineState(dragon);
+        controller.finishRoutine(dragon, FlightRoutineEndReason.CANCELLED);
         return true;
     }
 
-    public Vec3 resolveTarget(EnderDragon dragon, DragonPhaseInstance phase, Vec3 vanillaTarget) {
-        if (this.shouldYieldControl(phase)) {
-            this.clearRoutineState(dragon);
+    /** Internal bridge for the EnderDragon mixin; integrations should use the routine lifecycle API. */
+    public static Vec3 mixinResolveTarget(EnderDragon dragon, DragonPhaseInstance phase, Vec3 vanillaTarget) {
+        return forDragon(dragon).resolveTarget(dragon, phase, vanillaTarget);
+    }
+
+    /** Internal bridge for the EnderDragon mixin; integrations should use the routine lifecycle API. */
+    public static Vec3 mixinAdjustVerticalMovement(EnderDragon dragon, Vec3 vanillaMovement) {
+        return forDragon(dragon).adjustVerticalMovement(dragon, vanillaMovement);
+    }
+
+    /** Internal bridge for the EnderDragon mixin; integrations should use the routine lifecycle API. */
+    public static float mixinResolveTurnResponsiveness(EnderDragon dragon, float vanillaValue) {
+        return forDragon(dragon).resolveTurnResponsiveness(vanillaValue);
+    }
+
+    /** Internal bridge for the EnderDragon mixin; integrations should use the routine lifecycle API. */
+    public static boolean mixinApplyDirectVelocity(EnderDragon dragon) {
+        return forDragon(dragon).applyDirectVelocity(dragon);
+    }
+
+    /** Internal bridge for the EnderDragon mixin; integrations should use the routine lifecycle API. */
+    public static float mixinAdjustHorizontalAcceleration(EnderDragon dragon, float vanillaAcceleration) {
+        return forDragon(dragon).adjustHorizontalAcceleration(dragon, vanillaAcceleration);
+    }
+
+    Vec3 resolveTarget(EnderDragon dragon, DragonPhaseInstance phase, Vec3 vanillaTarget) {
+        FlightRoutine activeRoutine = this.routine;
+        if (activeRoutine == null) {
+            this.clearMovementState(dragon);
             return vanillaTarget;
         }
 
-        if (this.routine == null) {
-            this.clearRoutineState(dragon);
-            return vanillaTarget;
+        FlightRoutineResult result;
+        try {
+            DragonMovementPhase movementPhase = movementPhase(phase);
+            if (movementPhase == DragonMovementPhase.DYING
+                || (movementPhase.isProtected() && FlightRoutinePhasePolicy.shouldYieldControl(
+                    movementPhase, activeRoutine.canContinueDuring(movementPhase)
+                ))) {
+                this.finishRoutine(dragon, FlightRoutineEndReason.PHASE_TAKEOVER);
+                return this.vanillaTargetForCurrentPhase(dragon, phase, vanillaTarget);
+            }
+
+            if (activeRoutine instanceof ManagedFlightRoutine managedRoutine) {
+                result = Objects.requireNonNull(managedRoutine.tickResult(dragon), "routine result");
+            } else {
+                FlightCommand legacyCommand = activeRoutine.tick(dragon);
+                result = legacyCommand == null
+                    ? FlightRoutineResult.complete()
+                    : FlightRoutineResult.command(legacyCommand);
+            }
+        } catch (RuntimeException exception) {
+            this.finishRoutine(dragon, FlightRoutineEndReason.FAILED);
+            LOGGER.error("Dragon flight routine failed while ticking", exception);
+            return this.vanillaTargetForCurrentPhase(dragon, phase, vanillaTarget);
         }
 
-        FlightCommand command = this.routine.tick(dragon);
-        if (command == null) {
-            DragonPhaseInstance currentPhase = dragon.getPhaseManager().getCurrentPhase();
-            boolean phaseChanged = currentPhase != phase;
-            this.clearRoutineState(dragon);
-            return phaseChanged ? currentPhase.getFlyTargetLocation() : vanillaTarget;
+        if (result instanceof FlightRoutineResult.Complete) {
+            this.finishRoutine(dragon, FlightRoutineEndReason.COMPLETED);
+            return this.vanillaTargetForCurrentPhase(dragon, phase, vanillaTarget);
         }
+        if (result instanceof FlightRoutineResult.Pause) {
+            this.clearMovementState(dragon);
+            return this.vanillaTargetForCurrentPhase(dragon, phase, vanillaTarget);
+        }
+
+        FlightCommand command = ((FlightRoutineResult.Command)result).command();
 
         this.activeCommand = command;
         DragonFlightVisualState.setCustomDirectFlight(dragon, command.usesDirectVelocity());
@@ -105,7 +184,7 @@ public final class DragonMovementController {
         return this.smoothedTarget;
     }
 
-    public Vec3 adjustVerticalMovement(EnderDragon dragon, Vec3 vanillaMovement) {
+    Vec3 adjustVerticalMovement(EnderDragon dragon, Vec3 vanillaMovement) {
         if (this.routine == null || this.activeCommand == null || this.smoothedTarget == null) {
             return vanillaMovement;
         }
@@ -123,7 +202,7 @@ public final class DragonMovementController {
         return new Vec3(vanillaMovement.x, controlledVerticalVelocity, vanillaMovement.z);
     }
 
-    public float resolveTurnResponsiveness(float vanillaValue) {
+    float resolveTurnResponsiveness(float vanillaValue) {
         if (this.routine == null || this.activeCommand == null) {
             this.turnResponsivenessInitialized = false;
             return vanillaValue;
@@ -147,7 +226,7 @@ public final class DragonMovementController {
     }
 
     /** Applies a direct velocity request before vanilla collision-resolved movement and drag. */
-    public boolean applyDirectVelocity(EnderDragon dragon) {
+    boolean applyDirectVelocity(EnderDragon dragon) {
         if (this.routine == null || this.activeCommand == null || !this.activeCommand.usesDirectVelocity()) {
             return false;
         }
@@ -163,7 +242,7 @@ public final class DragonMovementController {
         return true;
     }
 
-    public float adjustHorizontalAcceleration(EnderDragon dragon, float vanillaAcceleration) {
+    float adjustHorizontalAcceleration(EnderDragon dragon, float vanillaAcceleration) {
         if (this.routine == null) {
             this.throttleInitialized = false;
             this.smoothedThrottle = 1.0;
@@ -197,8 +276,7 @@ public final class DragonMovementController {
         return vanillaAcceleration * (float)this.smoothedThrottle;
     }
 
-    private void clearRoutineState(EnderDragon dragon) {
-        this.routine = null;
+    private void clearMovementState(EnderDragon dragon) {
         this.activeCommand = null;
         this.smoothedTarget = null;
         this.smoothedThrottle = 1.0;
@@ -207,19 +285,42 @@ public final class DragonMovementController {
         DragonFlightVisualState.setCustomDirectFlight(dragon, false);
     }
 
-    private static boolean requiresVanillaControl(DragonPhaseInstance phase) {
-        EnderDragonPhase<?> currentPhase = phase.getPhase();
-        return phase.isSitting()
-            || currentPhase == EnderDragonPhase.DYING
-            || currentPhase == EnderDragonPhase.LANDING_APPROACH
-            || currentPhase == EnderDragonPhase.LANDING;
+    private void finishRoutine(EnderDragon dragon, FlightRoutineEndReason reason) {
+        FlightRoutine finishedRoutine = this.routine;
+        this.routine = null;
+        this.clearMovementState(dragon);
+        if (finishedRoutine == null) {
+            return;
+        }
+
+        try {
+            finishedRoutine.onStop(dragon, reason);
+        } catch (RuntimeException exception) {
+            LOGGER.error("Dragon flight routine failed during shutdown ({})", reason, exception);
+        }
     }
 
-    private boolean shouldYieldControl(DragonPhaseInstance phase) {
-        if (this.routine instanceof VerticalImpactRoutine) {
-            return phase.getPhase() == EnderDragonPhase.DYING;
+    private static boolean requiresVanillaControl(DragonPhaseInstance phase) {
+        return movementPhase(phase).isProtected();
+    }
+
+    private static DragonMovementPhase movementPhase(DragonPhaseInstance phase) {
+        EnderDragonPhase<?> currentPhase = phase.getPhase();
+        if (currentPhase == EnderDragonPhase.DYING) {
+            return DragonMovementPhase.DYING;
         }
-        return requiresVanillaControl(phase);
+        if (currentPhase == EnderDragonPhase.LANDING_APPROACH) {
+            return DragonMovementPhase.LANDING_APPROACH;
+        }
+        if (currentPhase == EnderDragonPhase.LANDING) {
+            return DragonMovementPhase.LANDING;
+        }
+        return phase.isSitting() ? DragonMovementPhase.SITTING : DragonMovementPhase.NORMAL;
+    }
+
+    private Vec3 vanillaTargetForCurrentPhase(EnderDragon dragon, DragonPhaseInstance originalPhase, Vec3 vanillaTarget) {
+        DragonPhaseInstance currentPhase = dragon.getPhaseManager().getCurrentPhase();
+        return currentPhase == originalPhase ? vanillaTarget : currentPhase.getFlyTargetLocation();
     }
 
     private Vec3 alignTargetToFlightTrend(EnderDragon dragon, Vec3 target) {

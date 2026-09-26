@@ -17,6 +17,7 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import dev.nullapex.NullApex;
 import dev.nullapex.dragon.movement.DragonMovementController;
+import dev.nullapex.dragon.movement.RoutineStartResult;
 import dev.nullapex.dragon.movement.TestDiveRoutine;
 import dev.nullapex.dragon.movement.VerticalImpactRoutine;
 
@@ -67,8 +68,9 @@ public final class DragonMovementCommands {
             return 0;
         }
 
-        if (!DragonMovementController.startRoutine(dragon, new TestDiveRoutine(target))) {
-            source.sendFailure(Component.literal("The dragon cannot start the test dive in its current state."));
+        RoutineStartResult result = DragonMovementController.tryStartRoutine(dragon, new TestDiveRoutine(target));
+        if (result != RoutineStartResult.STARTED) {
+            reportStartFailure(source, result, "test dive");
             return 0;
         }
 
@@ -88,13 +90,30 @@ public final class DragonMovementCommands {
             return 0;
         }
 
-        if (!DragonMovementController.startRoutine(dragon, new VerticalImpactRoutine())) {
-            source.sendFailure(Component.literal("The dragon cannot start a vertical impact flight in its current state."));
+        RoutineStartResult result = DragonMovementController.tryStartRoutine(dragon, new VerticalImpactRoutine());
+        if (result != RoutineStartResult.STARTED) {
+            reportStartFailure(source, result, "vertical impact flight");
             return 0;
         }
 
         source.sendSuccess(() -> Component.literal("Started the Ender Dragon vertical impact flight."), false);
         return 1;
+    }
+
+    private static void reportStartFailure(
+        CommandSourceStack source,
+        RoutineStartResult result,
+        String routineName
+    ) {
+        String reason = switch (result) {
+            case CLIENT_SIDE -> "movement routines can only start on the server";
+            case DRAGON_DEAD -> "the dragon is dead or dying";
+            case PROTECTED_PHASE -> "the dragon is in a protected vanilla phase";
+            case ALREADY_ACTIVE -> "another movement routine is already active";
+            case INITIALIZATION_FAILED -> "the routine failed during initialization";
+            case STARTED -> "";
+        };
+        source.sendFailure(Component.literal("Cannot start " + routineName + ": " + reason + "."));
     }
 
     private static EnderDragon findDragon(CommandSourceStack source, ServerLevel level) {
