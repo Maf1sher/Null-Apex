@@ -12,14 +12,9 @@ public final class ModAttachments {
         NeoForgeRegistries.ATTACHMENT_TYPES, NullApex.MOD_ID
     );
 
-    public static final Supplier<AttachmentType<Float>> DRAGON_ASCENT_PITCH = ATTACHMENT_TYPES.register(
-        "dragon_ascent_pitch",
-        () -> AttachmentType.builder(() -> 0.0F).sync(ByteBufCodecs.FLOAT).build()
-    );
-
-    public static final Supplier<AttachmentType<Float>> DRAGON_FLIGHT_PITCH = ATTACHMENT_TYPES.register(
-        "dragon_flight_pitch",
-        () -> AttachmentType.builder(() -> 0.0F).sync(ByteBufCodecs.FLOAT).build()
+    public static final Supplier<AttachmentType<Boolean>> DRAGON_DIRECT_FLIGHT = ATTACHMENT_TYPES.register(
+        "dragon_direct_flight",
+        () -> AttachmentType.builder(() -> false).sync(ByteBufCodecs.BOOL).build()
     );
 
     private ModAttachments() {

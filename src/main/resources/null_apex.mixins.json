@@ -6,10 +6,6 @@
   "mixins": [
     "EnderDragonMixin"
   ],
-  "client": [
-    "EnderDragonModelMixin",
-    "EnderDragonRendererMixin"
-  ],
   "injectors": {
     "defaultRequire": 1
   }
