@@ -22,22 +22,29 @@ public final class DragonMovementMixinBridge {
     }
 
     public static Vec3 resolveTarget(EnderDragon dragon, DragonPhaseInstance phase, Vec3 vanillaTarget) {
-        return DragonMovementController.forDragon(dragon).resolveTarget(dragon, phase, vanillaTarget);
+        DragonMovementController controller = DragonMovementController.existingForDragon(dragon);
+        return controller == null ? vanillaTarget : controller.resolveTarget(dragon, phase, vanillaTarget);
     }
 
     public static Vec3 adjustVerticalMovement(EnderDragon dragon, Vec3 vanillaMovement) {
-        return DragonMovementController.forDragon(dragon).adjustVerticalMovement(dragon, vanillaMovement);
+        DragonMovementController controller = DragonMovementController.existingForDragon(dragon);
+        return controller == null ? vanillaMovement : controller.adjustVerticalMovement(dragon, vanillaMovement);
     }
 
     public static float resolveTurnResponsiveness(EnderDragon dragon, float vanillaValue) {
-        return DragonMovementController.forDragon(dragon).resolveTurnResponsiveness(vanillaValue);
+        DragonMovementController controller = DragonMovementController.existingForDragon(dragon);
+        return controller == null ? vanillaValue : controller.resolveTurnResponsiveness(vanillaValue);
     }
 
     public static boolean applyDirectVelocity(EnderDragon dragon) {
-        return DragonMovementController.forDragon(dragon).applyDirectVelocity(dragon);
+        DragonMovementController controller = DragonMovementController.existingForDragon(dragon);
+        return controller != null && controller.applyDirectVelocity(dragon);
     }
 
     public static float adjustHorizontalAcceleration(EnderDragon dragon, float vanillaAcceleration) {
-        return DragonMovementController.forDragon(dragon).adjustHorizontalAcceleration(dragon, vanillaAcceleration);
+        DragonMovementController controller = DragonMovementController.existingForDragon(dragon);
+        return controller == null
+            ? vanillaAcceleration
+            : controller.adjustHorizontalAcceleration(dragon, vanillaAcceleration);
     }
 }

@@ -1,8 +1,6 @@
 package dev.nullapex.dragon.movement;
 
-import java.util.Map;
 import java.util.Objects;
-import java.util.WeakHashMap;
 import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
 import net.minecraft.world.entity.boss.enderdragon.phases.DragonPhaseInstance;
 import net.minecraft.world.entity.boss.enderdragon.phases.EnderDragonPhase;
@@ -16,7 +14,6 @@ import org.slf4j.LoggerFactory;
  */
 public final class DragonMovementController {
     private static final Logger LOGGER = LoggerFactory.getLogger("null_apex");
-    private static final Map<EnderDragon, DragonMovementController> CONTROLLERS = new WeakHashMap<>();
     private static final double CUSTOM_TARGET_STEP = 4.0;
     private static final float MAX_TURN_RESPONSIVENESS = 0.50F;
     private static final float MAX_DIRECT_TURN_RESPONSIVENESS = 1.0F;
@@ -33,16 +30,26 @@ public final class DragonMovementController {
     private boolean turnResponsivenessInitialized;
     private boolean throttleInitialized;
 
-    private DragonMovementController() {
+    DragonMovementController() {
     }
 
-    static synchronized DragonMovementController forDragon(EnderDragon dragon) {
+    private static DragonMovementController forDragon(EnderDragon dragon) {
         Objects.requireNonNull(dragon, "dragon");
-        return CONTROLLERS.computeIfAbsent(dragon, ignored -> new DragonMovementController());
+        DragonMovementControllerAccess access = controllerAccess(dragon);
+        return DragonMovementControllerStorage.getOrCreate(
+            access::nullApex$getMovementController,
+            access::nullApex$setMovementController,
+            DragonMovementController::new
+        );
     }
 
-    private static synchronized DragonMovementController existingForDragon(EnderDragon dragon) {
-        return CONTROLLERS.get(dragon);
+    static DragonMovementController existingForDragon(EnderDragon dragon) {
+        Objects.requireNonNull(dragon, "dragon");
+        return DragonMovementControllerStorage.existing(controllerAccess(dragon)::nullApex$getMovementController);
+    }
+
+    private static DragonMovementControllerAccess controllerAccess(EnderDragon dragon) {
+        return (DragonMovementControllerAccess)(Object)dragon;
     }
 
     /** Starts a routine without replacing an existing routine. */

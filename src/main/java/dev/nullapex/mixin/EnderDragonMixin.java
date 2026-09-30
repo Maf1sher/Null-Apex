@@ -1,16 +1,34 @@
 package dev.nullapex.mixin;
 
+import dev.nullapex.dragon.movement.DragonMovementController;
+import dev.nullapex.dragon.movement.DragonMovementControllerAccess;
 import dev.nullapex.dragon.movement.DragonMovementMixinBridge;
 import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
 import net.minecraft.world.entity.boss.enderdragon.phases.DragonPhaseInstance;
 import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.Redirect;
 
 @Mixin(EnderDragon.class)
-abstract class EnderDragonMixin {
+abstract class EnderDragonMixin implements DragonMovementControllerAccess {
+    @Unique
+    private DragonMovementController nullApex$movementController;
+
+    @Override
+    @Unique
+    public DragonMovementController nullApex$getMovementController() {
+        return this.nullApex$movementController;
+    }
+
+    @Override
+    @Unique
+    public void nullApex$setMovementController(DragonMovementController controller) {
+        this.nullApex$movementController = controller;
+    }
+
     @ModifyArg(
         method = "aiStep",
         at = @At(
