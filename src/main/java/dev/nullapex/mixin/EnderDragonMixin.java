@@ -1,5 +1,7 @@
 package dev.nullapex.mixin;
 
+import dev.nullapex.dragon.attack.DragonAttackController;
+import dev.nullapex.dragon.attack.DragonAttackControllerAccess;
 import dev.nullapex.dragon.movement.DragonMovementController;
 import dev.nullapex.dragon.movement.DragonMovementControllerAccess;
 import dev.nullapex.dragon.movement.DragonMovementMixinBridge;
@@ -13,9 +15,24 @@ import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.Redirect;
 
 @Mixin(EnderDragon.class)
-abstract class EnderDragonMixin implements DragonMovementControllerAccess {
+abstract class EnderDragonMixin implements DragonMovementControllerAccess, DragonAttackControllerAccess {
     @Unique
     private DragonMovementController nullApex$movementController;
+
+    @Unique
+    private DragonAttackController nullApex$attackController;
+
+    @Override
+    @Unique
+    public DragonAttackController nullApex$getAttackController() {
+        return this.nullApex$attackController;
+    }
+
+    @Override
+    @Unique
+    public void nullApex$setAttackController(DragonAttackController controller) {
+        this.nullApex$attackController = controller;
+    }
 
     @Override
     @Unique

@@ -1,6 +1,7 @@
 package dev.nullapex.dragon.fight;
 
 import dev.nullapex.NullApex;
+import dev.nullapex.dragon.attack.DragonAttackController;
 import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -15,6 +16,7 @@ public final class DragonFightTickHandler {
     public static void onEntityTick(EntityTickEvent.Post event) {
         if (event.getEntity() instanceof EnderDragon dragon) {
             DragonFightDirector.tick(dragon);
+            DragonAttackController.tick(dragon);
         }
     }
 }

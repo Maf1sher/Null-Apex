@@ -4,6 +4,7 @@ import dev.nullapex.attachment.ModAttachments;
 import java.util.Objects;
 import java.util.UUID;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
 import net.minecraft.world.level.dimension.end.EndDragonFight;
 import net.neoforged.neoforge.common.NeoForge;
@@ -25,14 +26,31 @@ public final class DragonFightDirector {
         return dragon.getData(ModAttachments.DRAGON_FIGHT_PHASE);
     }
 
+    public static EnderDragon getActiveDragon(ServerLevel level) {
+        Objects.requireNonNull(level, "level");
+        EndDragonFight fight = level.getDragonFight();
+        UUID activeDragonId = fight == null ? null : fight.getDragonUUID();
+        if (activeDragonId == null) {
+            return null;
+        }
+
+        Entity entity = level.getEntity(activeDragonId);
+        return entity instanceof EnderDragon dragon ? dragon : null;
+    }
+
+    public static boolean isActiveDragon(EnderDragon dragon) {
+        Objects.requireNonNull(dragon, "dragon");
+        return dragon.level() instanceof ServerLevel serverLevel
+            && !dragon.isDeadOrDying()
+            && getActiveDragon(serverLevel) == dragon;
+    }
+
     static void tick(EnderDragon dragon) {
         if (!(dragon.level() instanceof ServerLevel serverLevel) || dragon.isDeadOrDying()) {
             return;
         }
 
-        EndDragonFight fight = serverLevel.getDragonFight();
-        UUID activeDragonId = fight == null ? null : fight.getDragonUUID();
-        if (activeDragonId == null || !activeDragonId.equals(dragon.getUUID())) {
+        if (getActiveDragon(serverLevel) != dragon) {
             return;
         }
 
