@@ -1,7 +1,7 @@
 package dev.nullapex.dragon.movement;
 
 /** Math for visual dragon flight adjustments, kept independent of Minecraft classes. */
-public final class DragonFlightVisualMath {
+final class DragonFlightVisualMath {
     private static final double VANILLA_BASE_WING_FLAP_RATE = 0.2;
     private static final double MAX_CUSTOM_ASCENT_WING_FLAP_RATE = 0.06;
 
@@ -9,7 +9,7 @@ public final class DragonFlightVisualMath {
     }
 
     /** Limits vanilla's final wing-flap phase advance during custom upward direct flight. */
-    public static double limitWingFlapExponent(
+    static double limitWingFlapExponent(
         double verticalSpeed,
         double horizontalSpeed,
         boolean customDirectFlight

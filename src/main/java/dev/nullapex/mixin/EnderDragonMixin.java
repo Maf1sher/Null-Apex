@@ -1,8 +1,6 @@
 package dev.nullapex.mixin;
 
-import dev.nullapex.dragon.movement.DragonFlightVisualMath;
-import dev.nullapex.dragon.movement.DragonFlightVisualState;
-import dev.nullapex.dragon.movement.DragonMovementController;
+import dev.nullapex.dragon.movement.DragonMovementMixinBridge;
 import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
 import net.minecraft.world.entity.boss.enderdragon.phases.DragonPhaseInstance;
 import net.minecraft.world.phys.Vec3;
@@ -23,8 +21,8 @@ abstract class EnderDragonMixin {
     )
     private double nullApex$limitCustomAscentWingFlapRate(double verticalSpeed) {
         EnderDragon dragon = (EnderDragon)(Object)this;
-        boolean customDirectFlight = DragonFlightVisualState.isCustomDirectFlight(dragon);
-        return DragonFlightVisualMath.limitWingFlapExponent(
+        boolean customDirectFlight = DragonMovementMixinBridge.isCustomDirectFlight(dragon);
+        return DragonMovementMixinBridge.limitWingFlapExponent(
             verticalSpeed,
             dragon.getDeltaMovement().horizontalDistance(),
             customDirectFlight
@@ -40,7 +38,7 @@ abstract class EnderDragonMixin {
     )
     private Vec3 nullApex$resolveFlightTarget(DragonPhaseInstance phase) {
         EnderDragon dragon = (EnderDragon)(Object)this;
-        return DragonMovementController.mixinResolveTarget(dragon, phase, phase.getFlyTargetLocation());
+        return DragonMovementMixinBridge.resolveTarget(dragon, phase, phase.getFlyTargetLocation());
     }
 
     @ModifyArg(
@@ -54,7 +52,7 @@ abstract class EnderDragonMixin {
     )
     private Vec3 nullApex$adjustVerticalMovement(Vec3 movement) {
         EnderDragon dragon = (EnderDragon)(Object)this;
-        return DragonMovementController.mixinAdjustVerticalMovement(dragon, movement);
+        return DragonMovementMixinBridge.adjustVerticalMovement(dragon, movement);
     }
 
     @Redirect(
@@ -66,7 +64,7 @@ abstract class EnderDragonMixin {
     )
     private float nullApex$resolveTurnResponsiveness(DragonPhaseInstance phase) {
         float vanillaValue = phase.getTurnSpeed();
-        return DragonMovementController.mixinResolveTurnResponsiveness((EnderDragon)(Object)this, vanillaValue);
+        return DragonMovementMixinBridge.resolveTurnResponsiveness((EnderDragon)(Object)this, vanillaValue);
     }
 
     @Redirect(
@@ -77,11 +75,11 @@ abstract class EnderDragonMixin {
         )
     )
     private void nullApex$adjustHorizontalAcceleration(EnderDragon dragon, float acceleration, Vec3 direction) {
-        if (DragonMovementController.mixinApplyDirectVelocity(dragon)) {
+        if (DragonMovementMixinBridge.applyDirectVelocity(dragon)) {
             return;
         }
 
-        float controlledAcceleration = DragonMovementController.mixinAdjustHorizontalAcceleration(dragon, acceleration);
+        float controlledAcceleration = DragonMovementMixinBridge.adjustHorizontalAcceleration(dragon, acceleration);
         dragon.moveRelative(controlledAcceleration, direction);
     }
 }

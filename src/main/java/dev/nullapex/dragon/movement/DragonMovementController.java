@@ -99,31 +99,6 @@ public final class DragonMovementController {
         return true;
     }
 
-    /** Internal bridge for the EnderDragon mixin; integrations should use the routine lifecycle API. */
-    public static Vec3 mixinResolveTarget(EnderDragon dragon, DragonPhaseInstance phase, Vec3 vanillaTarget) {
-        return forDragon(dragon).resolveTarget(dragon, phase, vanillaTarget);
-    }
-
-    /** Internal bridge for the EnderDragon mixin; integrations should use the routine lifecycle API. */
-    public static Vec3 mixinAdjustVerticalMovement(EnderDragon dragon, Vec3 vanillaMovement) {
-        return forDragon(dragon).adjustVerticalMovement(dragon, vanillaMovement);
-    }
-
-    /** Internal bridge for the EnderDragon mixin; integrations should use the routine lifecycle API. */
-    public static float mixinResolveTurnResponsiveness(EnderDragon dragon, float vanillaValue) {
-        return forDragon(dragon).resolveTurnResponsiveness(vanillaValue);
-    }
-
-    /** Internal bridge for the EnderDragon mixin; integrations should use the routine lifecycle API. */
-    public static boolean mixinApplyDirectVelocity(EnderDragon dragon) {
-        return forDragon(dragon).applyDirectVelocity(dragon);
-    }
-
-    /** Internal bridge for the EnderDragon mixin; integrations should use the routine lifecycle API. */
-    public static float mixinAdjustHorizontalAcceleration(EnderDragon dragon, float vanillaAcceleration) {
-        return forDragon(dragon).adjustHorizontalAcceleration(dragon, vanillaAcceleration);
-    }
-
     Vec3 resolveTarget(EnderDragon dragon, DragonPhaseInstance phase, Vec3 vanillaTarget) {
         FlightRoutine activeRoutine = this.routine;
         if (activeRoutine == null) {
