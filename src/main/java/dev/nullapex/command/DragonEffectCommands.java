@@ -34,12 +34,9 @@ public final class DragonEffectCommands {
                 .then(
                     Commands.literal("effect")
                         .requires(source -> source.hasPermission(2))
-                        .then(
-                            Commands.literal("test")
-                                .then(Commands.literal("ring").executes(context -> testRing(context.getSource())))
-                                .then(Commands.literal("entity").executes(context -> testEntity(context.getSource())))
-                                .then(Commands.literal("all").executes(context -> testAll(context.getSource())))
-                        )
+                        .then(Commands.literal("ring").executes(context -> testRing(context.getSource())))
+                        .then(Commands.literal("entity").executes(context -> testEntity(context.getSource())))
+                        .then(Commands.literal("all").executes(context -> testAll(context.getSource())))
                 )
         );
     }
