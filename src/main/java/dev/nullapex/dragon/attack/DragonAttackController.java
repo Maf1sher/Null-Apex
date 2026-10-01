@@ -1,6 +1,7 @@
 package dev.nullapex.dragon.attack;
 
 import dev.nullapex.attachment.ModAttachments;
+import dev.nullapex.dragon.effect.DragonEffectScope;
 import dev.nullapex.dragon.fight.DragonFightDirector;
 import dev.nullapex.dragon.fight.DragonFightPhase;
 import java.util.Map;
@@ -17,6 +18,7 @@ public final class DragonAttackController {
     private final DragonAttackLifecycle lifecycle = new DragonAttackLifecycle();
     private final DragonAttackSelectionSchedule selectionSchedule = new DragonAttackSelectionSchedule();
     private DragonAttackExecution activeExecution;
+    private DragonEffectScope activeEffectScope;
 
     private DragonAttackController() {
     }
@@ -74,11 +76,14 @@ public final class DragonAttackController {
         }
 
         controller.activeExecution = execution;
+        DragonEffectScope effectScope = new DragonEffectScope(serverLevel);
+        controller.activeEffectScope = effectScope;
         DragonAttackController owner = controller;
         boolean behaviorStarted;
         try {
             behaviorStarted = execution.tryStart(
                 dragon,
+                effectScope,
                 reason -> owner.onBehaviorEnded(dragon, execution, reason)
             );
         } catch (RuntimeException exception) {
@@ -178,7 +183,7 @@ public final class DragonAttackController {
 
         DragonAttackExecution execution = controller.activeExecution;
         if (execution == null) {
-            controller.lifecycle.cancel();
+            controller.finishActive(dragon, DragonAttackEndReason.CANCELLED);
             return;
         }
 
@@ -227,16 +232,20 @@ public final class DragonAttackController {
 
     private void finishActive(EnderDragon dragon, DragonAttackEndReason reason) {
         DragonAttackExecution execution = this.activeExecution;
+        DragonEffectScope effectScope = this.activeEffectScope;
         this.activeExecution = null;
+        this.activeEffectScope = null;
         this.lifecycle.cancel();
-        if (execution == null) {
-            return;
-        }
-
         try {
-            execution.stop(dragon, reason);
+            if (execution != null) {
+                execution.stop(dragon, reason);
+            }
         } catch (RuntimeException exception) {
             LOGGER.error("Dragon attack cleanup failed ({})", reason, exception);
+        } finally {
+            if (effectScope != null) {
+                effectScope.close();
+            }
         }
     }
 

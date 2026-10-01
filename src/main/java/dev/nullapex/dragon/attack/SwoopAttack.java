@@ -1,6 +1,7 @@
 package dev.nullapex.dragon.attack;
 
 import dev.nullapex.dragon.fight.DragonFightPhase;
+import dev.nullapex.dragon.effect.DragonEffectScope;
 import dev.nullapex.dragon.movement.DragonMovementController;
 import dev.nullapex.dragon.movement.FlightCommand;
 import dev.nullapex.dragon.movement.FlightMath;
@@ -65,7 +66,11 @@ public final class SwoopAttack implements DragonAttack {
         }
 
         @Override
-        public boolean tryStart(EnderDragon dragon, Consumer<DragonAttackEndReason> behaviorEnded) {
+        public boolean tryStart(
+            EnderDragon dragon,
+            DragonEffectScope effects,
+            Consumer<DragonAttackEndReason> behaviorEnded
+        ) {
             if (!this.isValidTarget(dragon)) {
                 return false;
             }
