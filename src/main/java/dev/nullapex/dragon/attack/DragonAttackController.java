@@ -15,6 +15,7 @@ public final class DragonAttackController {
     private static final Logger LOGGER = LoggerFactory.getLogger("null_apex");
 
     private final DragonAttackLifecycle lifecycle = new DragonAttackLifecycle();
+    private final DragonAttackSelectionSchedule selectionSchedule = new DragonAttackSelectionSchedule();
     private DragonAttackExecution activeExecution;
 
     private DragonAttackController() {
@@ -96,6 +97,9 @@ public final class DragonAttackController {
                 DragonAttackCooldowns.startCooldown(cooldowns, definition.id(), gameTime, definition.cooldownTicks())
             );
         }
+        controller.selectionSchedule.onAttackStarted(
+            fightPhase, gameTime, randomIntervalTicks(dragon, DragonAttackSelectionTiming.attackInterval(fightPhase))
+        );
         return new StartResult(StartStatus.STARTED, 0L, fightPhase);
     }
 
@@ -119,6 +123,43 @@ public final class DragonAttackController {
             lifecycle == null ? 0 : lifecycle.remainingStageTicks(),
             cooldownRemaining
         );
+    }
+
+    public static boolean isIdle(EnderDragon dragon) {
+        Objects.requireNonNull(dragon, "dragon");
+        if (!(dragon.level() instanceof ServerLevel)) {
+            return false;
+        }
+
+        DragonAttackController controller = existingForDragon(dragon);
+        return controller == null || controller.lifecycle.stage() == DragonAttackStage.IDLE;
+    }
+
+    static boolean isAutomaticSelectionDue(EnderDragon dragon, DragonFightPhase phase, long gameTime) {
+        DragonAttackController controller = forDragon(dragon);
+        return controller.selectionSchedule.isDue(
+            phase,
+            gameTime,
+            () -> randomIntervalTicks(dragon, DragonAttackSelectionTiming.attackInterval(phase))
+        );
+    }
+
+    static void deferAutomaticSelectionUntil(EnderDragon dragon, long gameTime) {
+        forDragon(dragon).selectionSchedule.deferUntil(gameTime);
+    }
+
+    static void deferAutomaticSelectionUntilPhaseChange(EnderDragon dragon) {
+        forDragon(dragon).selectionSchedule.deferForPhaseChange();
+    }
+
+    static void retryAutomaticSelection(EnderDragon dragon, long gameTime) {
+        DragonAttackSelectionTiming.TickRange retryRange = DragonAttackSelectionTiming.retryInterval();
+        int retryTicks = randomIntervalTicks(dragon, retryRange);
+        forDragon(dragon).selectionSchedule.retryAt(gameTime, retryTicks);
+    }
+
+    private static int randomIntervalTicks(EnderDragon dragon, DragonAttackSelectionTiming.TickRange range) {
+        return range.ticksForOffset(dragon.getRandom().nextInt(range.size()));
     }
 
     public static void tick(EnderDragon dragon) {
