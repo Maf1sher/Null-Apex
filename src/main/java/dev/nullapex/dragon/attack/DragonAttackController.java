@@ -7,17 +7,22 @@ import java.util.Map;
 import java.util.Objects;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** Server-side attack lifecycle state for one dragon. */
 public final class DragonAttackController {
+    private static final Logger LOGGER = LoggerFactory.getLogger("null_apex");
+
     private final DragonAttackLifecycle lifecycle = new DragonAttackLifecycle();
+    private DragonAttackExecution activeExecution;
 
     private DragonAttackController() {
     }
 
-    public static StartResult tryStart(EnderDragon dragon, DragonAttackDefinition definition) {
+    public static StartResult tryStart(EnderDragon dragon, String attackId) {
         Objects.requireNonNull(dragon, "dragon");
-        Objects.requireNonNull(definition, "definition");
+        Objects.requireNonNull(attackId, "attackId");
 
         if (!(dragon.level() instanceof ServerLevel serverLevel)) {
             return new StartResult(StartStatus.CLIENT_SIDE, 0L, null);
@@ -29,11 +34,17 @@ public final class DragonAttackController {
             return new StartResult(StartStatus.NOT_ACTIVE_DRAGON, 0L, null);
         }
 
+        DragonAttack attack = DragonAttackRegistry.find(attackId).orElse(null);
+        if (attack == null) {
+            return new StartResult(StartStatus.UNKNOWN_ATTACK, 0L, DragonFightDirector.getCurrentPhase(dragon));
+        }
+
         DragonFightPhase fightPhase = DragonFightDirector.getCurrentPhase(dragon);
         DragonAttackController controller = existingForDragon(dragon);
         if (controller != null && controller.lifecycle.stage() != DragonAttackStage.IDLE) {
             return new StartResult(StartStatus.ALREADY_ACTIVE, 0L, fightPhase);
         }
+        DragonAttackDefinition definition = attack.definition();
         if (!definition.allowedFightPhases().contains(fightPhase)) {
             return new StartResult(StartStatus.PHASE_NOT_ALLOWED, 0L, fightPhase);
         }
@@ -45,6 +56,11 @@ public final class DragonAttackController {
             return new StartResult(StartStatus.COOLDOWN_ACTIVE, cooldownRemaining, fightPhase);
         }
 
+        DragonAttackExecution execution = attack.createExecution(dragon);
+        if (execution == null) {
+            return new StartResult(StartStatus.NO_TARGET, 0L, fightPhase);
+        }
+
         if (controller == null) {
             controller = forDragon(dragon);
         }
@@ -54,6 +70,24 @@ public final class DragonAttackController {
                 ? StartStatus.ALREADY_ACTIVE
                 : StartStatus.PHASE_NOT_ALLOWED;
             return new StartResult(status, 0L, fightPhase);
+        }
+
+        controller.activeExecution = execution;
+        DragonAttackController owner = controller;
+        boolean behaviorStarted;
+        try {
+            behaviorStarted = execution.tryStart(
+                dragon,
+                reason -> owner.onBehaviorEnded(dragon, execution, reason)
+            );
+        } catch (RuntimeException exception) {
+            LOGGER.error("Dragon attack '{}' failed during startup", attackId, exception);
+            behaviorStarted = false;
+        }
+
+        if (!behaviorStarted || controller.activeExecution != execution) {
+            controller.finishActive(dragon, DragonAttackEndReason.FAILED);
+            return new StartResult(StartStatus.BEHAVIOR_UNAVAILABLE, 0L, fightPhase);
         }
 
         if (definition.cooldownTicks() > 0) {
@@ -97,10 +131,29 @@ public final class DragonAttackController {
             return;
         }
         if (dragon.isDeadOrDying() || !DragonFightDirector.isActiveDragon(dragon)) {
+            controller.finishActive(dragon, DragonAttackEndReason.CANCELLED);
+            return;
+        }
+
+        DragonAttackExecution execution = controller.activeExecution;
+        if (execution == null) {
             controller.lifecycle.cancel();
             return;
         }
+
         controller.lifecycle.tick();
+        DragonAttackStage stage = controller.lifecycle.stage();
+        if (stage == DragonAttackStage.IDLE) {
+            controller.finishActive(dragon, DragonAttackEndReason.COMPLETED);
+            return;
+        }
+
+        try {
+            execution.tick(dragon, stage);
+        } catch (RuntimeException exception) {
+            LOGGER.error("Dragon attack '{}' failed while ticking", controller.lifecycle.activeAttackId(), exception);
+            controller.finishActive(dragon, DragonAttackEndReason.FAILED);
+        }
     }
 
     private static DragonAttackController forDragon(EnderDragon dragon) {
@@ -121,6 +174,31 @@ public final class DragonAttackController {
         return (DragonAttackControllerAccess)(Object)dragon;
     }
 
+    private void onBehaviorEnded(
+        EnderDragon dragon,
+        DragonAttackExecution execution,
+        DragonAttackEndReason reason
+    ) {
+        if (this.activeExecution == execution) {
+            this.finishActive(dragon, reason);
+        }
+    }
+
+    private void finishActive(EnderDragon dragon, DragonAttackEndReason reason) {
+        DragonAttackExecution execution = this.activeExecution;
+        this.activeExecution = null;
+        this.lifecycle.cancel();
+        if (execution == null) {
+            return;
+        }
+
+        try {
+            execution.stop(dragon, reason);
+        } catch (RuntimeException exception) {
+            LOGGER.error("Dragon attack cleanup failed ({})", reason, exception);
+        }
+    }
+
     public enum StartStatus {
         STARTED,
         CLIENT_SIDE,
@@ -128,7 +206,10 @@ public final class DragonAttackController {
         NOT_ACTIVE_DRAGON,
         ALREADY_ACTIVE,
         COOLDOWN_ACTIVE,
-        PHASE_NOT_ALLOWED
+        PHASE_NOT_ALLOWED,
+        UNKNOWN_ATTACK,
+        NO_TARGET,
+        BEHAVIOR_UNAVAILABLE
     }
 
     public record StartResult(StartStatus status, long cooldownTicksRemaining, DragonFightPhase fightPhase) {

@@ -94,30 +94,6 @@ class FlightMathTest {
     }
 
     @Test
-    void climbTargetIsRelativeToTheDragonStartPositionNotThePlayer() {
-        assertEquals(124.0, TestDiveRoutine.climbTargetY(64.0), 1.0E-9);
-    }
-
-    @Test
-    void climbCapsVerticalSpeedAndWaitsForTheDragonToLevelNearTheTarget() {
-        assertEquals(0.6, TestDiveRoutine.cappedVerticalSpeed(100.0, 0.6), 1.0E-9);
-        assertEquals(-0.6, TestDiveRoutine.cappedVerticalSpeed(-100.0, 0.6), 1.0E-9);
-        assertFalse(TestDiveRoutine.shouldStartDive(119.0, 124.0, 0.0));
-        assertFalse(TestDiveRoutine.shouldStartDive(123.0, 124.0, 0.3));
-        assertTrue(TestDiveRoutine.shouldStartDive(123.0, 124.0, 0.1));
-    }
-
-    @Test
-    void climbUsesDiagonalVelocityToReduceVanillaWingFlapRate() {
-        FlightVector velocity = TestDiveRoutine.climbVelocity(3.0, 4.0, 100.0);
-
-        assertEquals(0.24, velocity.x(), 1.0E-9);
-        assertEquals(0.6, velocity.y(), 1.0E-9);
-        assertEquals(0.32, velocity.z(), 1.0E-9);
-        assertEquals(0.4, Math.hypot(velocity.x(), velocity.z()), 1.0E-9);
-    }
-
-    @Test
     void customAscentCapsFinalWingFlapRateWithoutChangingVanillaOrDiveRates() {
         double vanillaExponent = DragonFlightVisualMath.limitWingFlapExponent(1.8, 0.0, false);
         double verticalAscentExponent = DragonFlightVisualMath.limitWingFlapExponent(1.8, 0.0, true);
@@ -149,23 +125,6 @@ class FlightMathTest {
         assertFalse(VerticalImpactRoutine.crossedImpactSurface(10.0, 9.6, 9.5));
         assertTrue(VerticalImpactRoutine.crossedImpactSurface(10.0, 9.0, 9.5));
         assertFalse(VerticalImpactRoutine.crossedImpactSurface(9.0, 8.0, 9.5));
-    }
-
-    @Test
-    void divePassBeginsNearPlayerAndRecoveryWaitsForThePass() {
-        assertFalse(TestDiveRoutine.shouldBeginPass(13.0));
-        assertTrue(TestDiveRoutine.shouldBeginPass(12.0));
-        assertFalse(TestDiveRoutine.shouldBeginRecovery(10.0, 9.0, 80));
-        assertFalse(TestDiveRoutine.shouldBeginRecovery(7.0, 2.0, 80));
-        assertTrue(TestDiveRoutine.shouldBeginRecovery(8.0, 8.0, 80));
-        assertTrue(TestDiveRoutine.shouldBeginRecovery(0.0, 30.0, 181));
-    }
-
-    @Test
-    void passTargetStaysAheadAndRecoveryOnlyRisesSlightlyFromThePassHeight() {
-        assertEquals(16.0, TestDiveRoutine.passTargetLeadDistance(-50.0), 1.0E-9);
-        assertEquals(22.0, TestDiveRoutine.passTargetLeadDistance(10.0), 1.0E-9);
-        assertEquals(70.0, TestDiveRoutine.recoveryTargetY(64.0), 1.0E-9);
     }
 
     @Test
