@@ -8,14 +8,13 @@ import dev.nullapex.dragon.effect.EffectTimeline;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.resources.ResourceLocation;
-import net.neoforged.neoforge.client.NeoForgeRenderTypes;
 
 /** Textured, layered sample renderer that also serves as a debug test for world-space VFX. */
 final class RuneCircleRenderer implements VisualEffectRenderer {
     private static final ResourceLocation TEXTURE = ResourceLocation.fromNamespaceAndPath(
         NullApex.MOD_ID, "textures/effect/rune_circle.png"
     );
-    private static final RenderType RENDER_TYPE = NeoForgeRenderTypes.getTranslucentParticlesTarget(TEXTURE);
+    private static final RenderType RENDER_TYPE = EffectRenderTypes.visual(TEXTURE);
 
     @Override
     public void render(
