@@ -13,7 +13,7 @@ final class EffectRenderTypes {
     private static final Function<ResourceLocation, RenderType> VISUAL = Util.memoize(
         texture -> createVisual(texture)
     );
-    private static final Function<ResourceLocation, RenderType> ENTITY = Util.memoize(
+    private static final Function<ResourceLocation, RenderType> ENTITY_UNSORTED = Util.memoize(
         texture -> createEntity(texture)
     );
 
@@ -24,8 +24,8 @@ final class EffectRenderTypes {
         return VISUAL.apply(texture);
     }
 
-    static RenderType entity(ResourceLocation texture) {
-        return ENTITY.apply(texture);
+    static RenderType entityUnsorted(ResourceLocation texture) {
+        return ENTITY_UNSORTED.apply(texture);
     }
 
     private static RenderType createVisual(ResourceLocation texture) {
@@ -58,7 +58,7 @@ final class EffectRenderTypes {
             .setCullState(RenderStateShard.NO_CULL)
             .setLightmapState(RenderStateShard.LIGHTMAP)
             .setOverlayState(RenderStateShard.OVERLAY)
-            .setOutputState(RenderStateShard.PARTICLES_TARGET)
+            .setOutputState(RenderStateShard.MAIN_TARGET)
             .setWriteMaskState(RenderStateShard.COLOR_WRITE)
             .createCompositeState(true);
         return RenderType.create(
@@ -67,7 +67,7 @@ final class EffectRenderTypes {
             VertexFormat.Mode.QUADS,
             256,
             true,
-            true,
+            false,
             state
         );
     }

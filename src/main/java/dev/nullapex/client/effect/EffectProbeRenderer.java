@@ -33,7 +33,7 @@ public final class EffectProbeRenderer extends EntityRenderer<EffectProbeEntity>
         float progress = entity.getEffectProgress(partialTick);
         float grow = EffectTimeline.easeOutCubic(Math.min(1.0F, progress / 0.22F));
         float alpha = EffectTimeline.fadeEnvelope(progress, 0.02F, 0.18F);
-        VertexConsumer vertices = bufferSource.getBuffer(EffectRenderTypes.entity(TEXTURE));
+        VertexConsumer vertices = bufferSource.getBuffer(EffectRenderTypes.entityUnsorted(TEXTURE));
 
         poseStack.pushPose();
         poseStack.translate(0.0, 0.05, 0.0);
