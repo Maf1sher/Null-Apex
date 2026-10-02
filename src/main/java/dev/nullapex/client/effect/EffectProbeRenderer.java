@@ -38,6 +38,7 @@ public final class EffectProbeRenderer extends EntityRenderer<EffectProbeEntity>
 
         poseStack.pushPose();
         poseStack.translate(0.0, 0.05, 0.0);
+        EffectRenderTransform.applyRotation(poseStack, entityYaw, entity.getXRot(), entity.getEffectRoll());
         poseStack.scale(1.15F * grow, 2.8F * grow, 1.0F);
         drawShardPlane(vertices, poseStack.last(), alpha, packedLight);
         poseStack.mulPose(com.mojang.math.Axis.YP.rotationDegrees(90.0F));

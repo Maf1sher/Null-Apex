@@ -28,12 +28,11 @@ final class RuneCircleRenderer implements VisualEffectRenderer {
         float entrance = EffectTimeline.easeOutCubic(Math.min(1.0F, progress / 0.15F));
         float alpha = EffectTimeline.fadeEnvelope(progress, 0.10F, 0.25F);
         float worldScale = effect.payload().scale() * entrance;
-        float baseYaw = (float)Math.toRadians(effect.payload().yaw());
         VertexConsumer vertices = bufferSource.getBuffer(RENDER_TYPE);
 
-        renderLayer(poseStack, vertices, worldScale, baseYaw + ageTicks * 0.035F, alpha, 0.30F);
-        renderLayer(poseStack, vertices, worldScale * 0.72F, -baseYaw - ageTicks * 0.052F, alpha, 0.20F);
-        renderLayer(poseStack, vertices, worldScale * 0.43F, baseYaw + ageTicks * 0.075F, alpha, 0.10F);
+        renderLayer(poseStack, vertices, worldScale, ageTicks * 0.035F, alpha, 0.30F);
+        renderLayer(poseStack, vertices, worldScale * 0.72F, -ageTicks * 0.052F, alpha, 0.20F);
+        renderLayer(poseStack, vertices, worldScale * 0.43F, ageTicks * 0.075F, alpha, 0.10F);
     }
 
     @Override

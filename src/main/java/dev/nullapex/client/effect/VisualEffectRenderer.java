@@ -4,7 +4,10 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 
-/** Client-only renderer for one registered transient visual effect type. */
+/**
+ * Client-only renderer for one registered transient visual effect type. The pose stack is positioned and oriented
+ * at the effect's interpolated world transform before this callback.
+ */
 public interface VisualEffectRenderer {
     void render(VisualEffectInstance effect, float ageTicks, float progress, PoseStack poseStack,
         MultiBufferSource bufferSource);

@@ -15,11 +15,17 @@ public final class EffectNetwork {
 
     @SubscribeEvent
     public static void registerPayloads(RegisterPayloadHandlersEvent event) {
-        var registrar = event.registrar("1");
+        var registrar = event.registrar("2");
         registrar.playToClient(StartVisualEffectPayload.TYPE, StartVisualEffectPayload.STREAM_CODEC,
             (payload, context) -> {
                 if (FMLEnvironment.dist == Dist.CLIENT) {
                     context.enqueueWork(() -> ClientVisualEffectManager.start(payload));
+                }
+            });
+        registrar.playToClient(UpdateVisualEffectPayload.TYPE, UpdateVisualEffectPayload.STREAM_CODEC,
+            (payload, context) -> {
+                if (FMLEnvironment.dist == Dist.CLIENT) {
+                    context.enqueueWork(() -> ClientVisualEffectManager.update(payload));
                 }
             });
         registrar.playToClient(StopVisualEffectPayload.TYPE, StopVisualEffectPayload.STREAM_CODEC,

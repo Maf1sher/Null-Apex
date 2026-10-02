@@ -2,8 +2,10 @@ package dev.nullapex.client.effect;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import dev.nullapex.dragon.effect.EffectTimeline;
+import dev.nullapex.dragon.effect.EffectTransform;
 import dev.nullapex.dragon.effect.network.StartVisualEffectPayload;
 import dev.nullapex.dragon.effect.network.StopVisualEffectPayload;
+import dev.nullapex.dragon.effect.network.UpdateVisualEffectPayload;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -33,7 +35,7 @@ public final class ClientVisualEffectManager {
         if (VisualEffectRendererRegistry.find(payload.effectId()).isEmpty()) {
             return;
         }
-        ACTIVE_EFFECTS.put(payload.instanceId(), new VisualEffectInstance(payload));
+        ACTIVE_EFFECTS.put(payload.instanceId(), new VisualEffectInstance(payload, minecraft.level.getGameTime()));
         while (ACTIVE_EFFECTS.size() > MAX_ACTIVE_EFFECTS) {
             UUID oldest = ACTIVE_EFFECTS.keySet().iterator().next();
             ACTIVE_EFFECTS.remove(oldest);
@@ -46,6 +48,17 @@ public final class ClientVisualEffectManager {
             return;
         }
         ACTIVE_EFFECTS.remove(payload.instanceId());
+    }
+
+    public static void update(UpdateVisualEffectPayload payload) {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.level == null || !minecraft.level.dimension().location().equals(payload.dimensionId())) {
+            return;
+        }
+        VisualEffectInstance effect = ACTIVE_EFFECTS.get(payload.instanceId());
+        if (effect != null) {
+            ACTIVE_EFFECTS.put(payload.instanceId(), effect.withTransform(payload.transform(), payload.updateGameTime()));
+        }
     }
 
     public static void render(net.neoforged.neoforge.client.event.RenderLevelStageEvent event) {
@@ -77,14 +90,15 @@ public final class ClientVisualEffectManager {
             for (VisualEffectInstance effect : ACTIVE_EFFECTS.values()) {
                 VisualEffectRendererRegistry.find(effect.effectId()).ifPresent(renderer -> {
                     StartVisualEffectPayload payload = effect.payload();
+                    EffectTransform transform = effect.interpolatedTransform(gameTime, partialTick);
                     double cullingRadius = payload.scale();
                     AABB renderBounds = new AABB(
-                        payload.x() - cullingRadius,
-                        payload.y() - cullingRadius,
-                        payload.z() - cullingRadius,
-                        payload.x() + cullingRadius,
-                        payload.y() + cullingRadius,
-                        payload.z() + cullingRadius
+                        transform.position().x() - cullingRadius,
+                        transform.position().y() - cullingRadius,
+                        transform.position().z() - cullingRadius,
+                        transform.position().x() + cullingRadius,
+                        transform.position().y() + cullingRadius,
+                        transform.position().z() + cullingRadius
                     );
                     if (!event.getFrustum().isVisible(renderBounds)) {
                         return;
@@ -95,7 +109,10 @@ public final class ClientVisualEffectManager {
                     );
                     poseStack.pushPose();
                     try {
-                        poseStack.translate(payload.x(), payload.y(), payload.z());
+                        poseStack.translate(transform.position().x(), transform.position().y(),
+                            transform.position().z());
+                        EffectRenderTransform.applyRotation(poseStack, transform.yaw(), transform.pitch(),
+                            transform.roll());
                         usedRenderTypes.add(renderer.renderType());
                         renderer.render(effect, (float)age, progress, poseStack, buffers);
                     } finally {

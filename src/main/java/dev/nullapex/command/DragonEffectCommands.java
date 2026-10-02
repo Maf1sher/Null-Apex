@@ -1,6 +1,9 @@
 package dev.nullapex.command;
 
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.FloatArgumentType;
+import com.mojang.brigadier.builder.LiteralArgumentBuilder;
+import com.mojang.brigadier.context.CommandContext;
 import dev.nullapex.NullApex;
 import dev.nullapex.dragon.effect.DragonEffectScope;
 import dev.nullapex.dragon.effect.EffectAudience;
@@ -11,6 +14,7 @@ import dev.nullapex.dragon.effect.VisualEffectSpec;
 import dev.nullapex.dragon.effect.entity.EffectProbeEntity;
 import dev.nullapex.dragon.effect.entity.ModEffectEntities;
 import dev.nullapex.sound.ModSounds;
+import java.util.function.ToIntFunction;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
@@ -23,6 +27,8 @@ import net.neoforged.neoforge.event.RegisterCommandsEvent;
 
 @EventBusSubscriber(modid = NullApex.MOD_ID, bus = EventBusSubscriber.Bus.GAME)
 public final class DragonEffectCommands {
+    private static final float ANGLE_LIMIT_DEGREES = 360.0F;
+
     private DragonEffectCommands() {
     }
 
@@ -34,26 +40,72 @@ public final class DragonEffectCommands {
                 .then(
                     Commands.literal("effect")
                         .requires(source -> source.hasPermission(2))
-                        .then(Commands.literal("ring").executes(context -> testRing(context.getSource())))
-                        .then(Commands.literal("entity").executes(context -> testEntity(context.getSource())))
-                        .then(Commands.literal("all").executes(context -> testAll(context.getSource())))
+                        .then(withAngles(
+                            Commands.literal("ring").executes(context -> testRing(
+                                context.getSource(), defaultRingAngles(context.getSource())
+                            )),
+                            context -> testRing(context.getSource(), readAngles(context))
+                        ))
+                        .then(withAngles(
+                            Commands.literal("entity").executes(context -> testEntity(
+                                context.getSource(), EffectAngles.ZERO
+                            )),
+                            context -> testEntity(context.getSource(), readAngles(context))
+                        ))
+                        .then(withAngles(
+                            Commands.literal("all").executes(context -> testAll(
+                                context.getSource(), defaultRingAngles(context.getSource()), EffectAngles.ZERO
+                            )),
+                            context -> {
+                                EffectAngles angles = readAngles(context);
+                                return testAll(context.getSource(), angles, angles);
+                            }
+                        ))
                 )
         );
     }
 
-    private static int testRing(CommandSourceStack source) {
+    private static LiteralArgumentBuilder<CommandSourceStack> withAngles(
+        LiteralArgumentBuilder<CommandSourceStack> command,
+        ToIntFunction<CommandContext<CommandSourceStack>> executor
+    ) {
+        return command.then(Commands.argument("yaw", FloatArgumentType.floatArg(
+                -ANGLE_LIMIT_DEGREES, ANGLE_LIMIT_DEGREES
+            ))
+            .then(Commands.argument("pitch", FloatArgumentType.floatArg(
+                    -ANGLE_LIMIT_DEGREES, ANGLE_LIMIT_DEGREES
+                ))
+                .then(Commands.argument("roll", FloatArgumentType.floatArg(
+                        -ANGLE_LIMIT_DEGREES, ANGLE_LIMIT_DEGREES
+                    ))
+                    .executes(executor::applyAsInt))));
+    }
+
+    private static EffectAngles readAngles(CommandContext<CommandSourceStack> context) {
+        return new EffectAngles(
+            context.getArgument("yaw", Float.class),
+            context.getArgument("pitch", Float.class),
+            context.getArgument("roll", Float.class)
+        );
+    }
+
+    private static EffectAngles defaultRingAngles(CommandSourceStack source) {
+        return new EffectAngles(source.getRotation().y, 0.0F, 0.0F);
+    }
+
+    private static int testRing(CommandSourceStack source, EffectAngles angles) {
         ServerLevel level = source.getLevel();
         Vec3 position = effectPosition(source);
-        startRing(level, position, source.getRotation().y);
+        startRing(level, position, angles);
         playTestSound(level, position);
         source.sendSuccess(() -> Component.literal("Started the visual-only rune effect test."), false);
         return 1;
     }
 
-    private static int testEntity(CommandSourceStack source) {
+    private static int testEntity(CommandSourceStack source, EffectAngles angles) {
         ServerLevel level = source.getLevel();
         Vec3 position = effectPosition(source);
-        if (!spawnProbe(level, position)) {
+        if (!spawnProbe(level, position, angles)) {
             source.sendFailure(Component.literal("Could not create the effect probe entity."));
             return 0;
         }
@@ -62,11 +114,11 @@ public final class DragonEffectCommands {
         return 1;
     }
 
-    private static int testAll(CommandSourceStack source) {
+    private static int testAll(CommandSourceStack source, EffectAngles ringAngles, EffectAngles entityAngles) {
         ServerLevel level = source.getLevel();
         Vec3 position = effectPosition(source);
-        startRing(level, position, source.getRotation().y);
-        if (!spawnProbe(level, position)) {
+        startRing(level, position, ringAngles);
+        if (!spawnProbe(level, position, entityAngles)) {
             source.sendFailure(Component.literal("Started the visual test, but could not create the effect entity."));
             return 0;
         }
@@ -75,12 +127,13 @@ public final class DragonEffectCommands {
         return 1;
     }
 
-    private static void startRing(ServerLevel level, Vec3 position, float yaw) {
+    private static void startRing(ServerLevel level, Vec3 position, EffectAngles angles) {
         VisualEffectService.start(level, new VisualEffectSpec(
             EffectVisualIds.DEBUG_RUNE_CIRCLE,
             position,
-            yaw,
-            0.0F,
+            angles.yaw(),
+            angles.pitch(),
+            angles.roll(),
             5.0F,
             120,
             level.getRandom().nextLong(),
@@ -88,13 +141,16 @@ public final class DragonEffectCommands {
         ));
     }
 
-    private static boolean spawnProbe(ServerLevel level, Vec3 position) {
+    private static boolean spawnProbe(ServerLevel level, Vec3 position, EffectAngles angles) {
         EffectProbeEntity entity = ModEffectEntities.EFFECT_PROBE.get().create(level);
         if (entity == null) {
             return false;
         }
         entity.configureLifetime(80);
         entity.setPos(position.x, position.y, position.z);
+        entity.setYRot(angles.yaw());
+        entity.setXRot(angles.pitch());
+        entity.setEffectRoll(angles.roll());
         try (DragonEffectScope scope = new DragonEffectScope(level)) {
             scope.spawnEntity(entity, EffectLifetimePolicy.FINISH_NATURALLY);
         }
@@ -109,5 +165,9 @@ public final class DragonEffectCommands {
     private static Vec3 effectPosition(CommandSourceStack source) {
         Vec3 position = source.getPosition();
         return new Vec3(position.x, position.y - 1.4, position.z);
+    }
+
+    private record EffectAngles(float yaw, float pitch, float roll) {
+        private static final EffectAngles ZERO = new EffectAngles(0.0F, 0.0F, 0.0F);
     }
 }
