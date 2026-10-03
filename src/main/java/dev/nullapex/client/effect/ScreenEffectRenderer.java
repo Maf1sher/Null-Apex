@@ -1,11 +1,18 @@
 package dev.nullapex.client.effect;
 
 import com.mojang.blaze3d.vertex.PoseStack;
+import java.util.Objects;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 
 /** Optional screen-space mask contribution for a visual-effect renderer. */
 public interface ScreenEffectRenderer extends VisualEffectRenderer {
+    /** Returns the screen-space operation to apply to this effect. */
+    default ScreenEffectSettings screenEffectSettings(EffectRenderContext context) {
+        Objects.requireNonNull(context, "context");
+        return ScreenEffectSettings.DIAGNOSTIC_PREVIEW;
+    }
+
     /** Returns the per-instance compositor inputs for this effect. */
     ScreenEffectMask screenEffectMask(EffectRenderContext context);
 

@@ -163,10 +163,12 @@ public final class ClientVisualEffectManager {
             if (!event.getFrustum().isVisible(this.validatedCullingBounds(renderer, context))) {
                 continue;
             }
+            ScreenEffectSettings settings = Objects.requireNonNull(screenRenderer.screenEffectSettings(context),
+                "screenEffectSettings");
             ScreenEffectMask mask = Objects.requireNonNull(screenRenderer.screenEffectMask(context),
                 "screenEffectMask");
             if (mask.strength() > 0.0F) {
-                screenEffects.add(new ScreenEffectFrame(context, screenRenderer, mask));
+                screenEffects.add(new ScreenEffectFrame(context, screenRenderer, settings, mask));
             }
         }
         return List.copyOf(screenEffects);

@@ -68,6 +68,11 @@ final class RuneCircleRenderer implements ScreenEffectRenderer {
     }
 
     @Override
+    public ScreenEffectSettings screenEffectSettings(EffectRenderContext context) {
+        return ScreenEffectSettings.DIAGNOSTIC_PREVIEW;
+    }
+
+    @Override
     public ScreenEffectMask screenEffectMask(EffectRenderContext context) {
         int color = Long.hashCode(context.seed());
         float red = 0.25F + ((color >>> 16) & 0xFF) / 255.0F * 0.65F;

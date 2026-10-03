@@ -86,7 +86,7 @@ final class ClientScreenCompositor {
             for (ScreenEffectFrame screenEffect : screenEffects) {
                 this.renderMask(event, manager, mainTarget, screenEffect);
                 RenderTarget destination = currentColor == mainTarget ? this.compositionTarget : mainTarget;
-                this.compositeMask(currentColor, destination, screenEffect.mask());
+                this.compositeEffect(currentColor, destination, screenEffect);
                 currentColor = destination;
             }
 
@@ -181,6 +181,12 @@ final class ClientScreenCompositor {
             if (shaderApplied) {
                 shader.clear();
             }
+        }
+    }
+
+    private void compositeEffect(RenderTarget sourceColor, RenderTarget destination, ScreenEffectFrame screenEffect) {
+        switch (screenEffect.settings().operation()) {
+            case DIAGNOSTIC_MASK_PREVIEW -> this.compositeMask(sourceColor, destination, screenEffect.mask());
         }
     }
 
