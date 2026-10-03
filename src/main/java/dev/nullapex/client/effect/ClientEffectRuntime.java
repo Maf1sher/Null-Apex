@@ -10,6 +10,7 @@ import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 /** Client-lifetime owner and narrow entry point for effect event delegates. */
 public final class ClientEffectRuntime {
     private static ClientVisualEffectManager manager;
+    private static ClientScreenCompositor screenCompositor;
 
     private ClientEffectRuntime() {
     }
@@ -21,6 +22,7 @@ public final class ClientEffectRuntime {
         VisualEffectRendererRegistry rendererRegistry = new VisualEffectRendererRegistry();
         rendererRegistry.registerBuiltIns();
         manager = new ClientVisualEffectManager(rendererRegistry);
+        screenCompositor = new ClientScreenCompositor();
     }
 
     public static void start(StartVisualEffectPayload payload) {
@@ -45,9 +47,23 @@ public final class ClientEffectRuntime {
     }
 
     static void render(RenderLevelStageEvent event) {
-        ClientVisualEffectManager current = manager;
+        if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_PARTICLES) {
+            ClientVisualEffectManager current = manager;
+            if (current != null) {
+                current.render(event);
+            }
+        } else if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_LEVEL) {
+            ClientScreenCompositor current = screenCompositor;
+            if (current != null) {
+                current.render(event);
+            }
+        }
+    }
+
+    static void setScreenCompositorEnabled(boolean enabled) {
+        ClientScreenCompositor current = screenCompositor;
         if (current != null) {
-            current.render(event);
+            current.setEnabled(enabled);
         }
     }
 
@@ -56,12 +72,20 @@ public final class ClientEffectRuntime {
         if (current != null) {
             current.onLevelUnload(level);
         }
+        ClientScreenCompositor compositor = screenCompositor;
+        if (compositor != null) {
+            compositor.onLevelUnload();
+        }
     }
 
     static void onResourceReload(ResourceManager resourceManager) {
         ClientVisualEffectManager current = manager;
         if (current != null) {
             current.onResourceReload(resourceManager);
+        }
+        ClientScreenCompositor compositor = screenCompositor;
+        if (compositor != null) {
+            compositor.onResourceReload();
         }
     }
 }
