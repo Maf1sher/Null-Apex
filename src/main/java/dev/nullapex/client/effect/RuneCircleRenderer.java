@@ -8,6 +8,7 @@ import dev.nullapex.dragon.effect.EffectTimeline;
 import java.util.List;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.AABB;
 
@@ -16,7 +17,7 @@ final class RuneCircleRenderer implements VisualEffectRenderer {
     private static final ResourceLocation TEXTURE = ResourceLocation.fromNamespaceAndPath(
         NullApex.MOD_ID, "textures/effect/rune_circle.png"
     );
-    private static final RenderType RENDER_TYPE = EffectRenderTypes.visual(TEXTURE);
+    private static final RenderType RENDER_TYPE = EffectRenderTypes.debugVisual(TEXTURE);
     private static final String OUTER_PASS = "outer";
     private static final String MIDDLE_PASS = "middle";
     private static final String INNER_PASS = "inner";
@@ -41,15 +42,16 @@ final class RuneCircleRenderer implements VisualEffectRenderer {
         float entrance = EffectTimeline.easeOutCubic(Math.min(1.0F, context.progress() / 0.15F));
         float alpha = EffectTimeline.fadeEnvelope(context.progress(), 0.10F, 0.25F);
         float worldScale = context.scale() * entrance;
+        int shaderData = shaderData(context);
         VertexConsumer vertices = bufferSource.getBuffer(RENDER_TYPE);
 
         switch (pass.id()) {
             case OUTER_PASS -> renderLayer(poseStack, vertices, worldScale,
-                context.ageTicks() * 0.035F, alpha, 0.30F);
+                context.ageTicks() * 0.035F, alpha, 0.30F, shaderData);
             case MIDDLE_PASS -> renderLayer(poseStack, vertices, worldScale * 0.72F,
-                -context.ageTicks() * 0.052F, alpha, 0.20F);
+                -context.ageTicks() * 0.052F, alpha, 0.20F, shaderData);
             case INNER_PASS -> renderLayer(poseStack, vertices, worldScale * 0.43F,
-                context.ageTicks() * 0.075F, alpha, 0.10F);
+                context.ageTicks() * 0.075F, alpha, 0.10F, shaderData);
             default -> throw new IllegalArgumentException("Unknown rune circle render pass: " + pass.id());
         }
     }
@@ -70,7 +72,8 @@ final class RuneCircleRenderer implements VisualEffectRenderer {
         float scale,
         float rotation,
         float alpha,
-        float height
+        float height,
+        int shaderData
     ) {
         poseStack.pushPose();
         poseStack.translate(0.0, height, 0.0);
@@ -78,17 +81,24 @@ final class RuneCircleRenderer implements VisualEffectRenderer {
         poseStack.scale(scale, 1.0F, scale);
         PoseStack.Pose pose = poseStack.last();
         vertices.addVertex(pose, -1.0F, 0.0F, -1.0F).setColor(0.45F, 0.92F, 1.0F, alpha)
-            .setUv(0.0F, 0.0F).setOverlay(net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY)
+            .setUv(0.0F, 0.0F).setOverlay(shaderData)
             .setLight(0x00F000F0).setNormal(pose, 0.0F, 1.0F, 0.0F);
         vertices.addVertex(pose, -1.0F, 0.0F, 1.0F).setColor(0.45F, 0.92F, 1.0F, alpha)
-            .setUv(0.0F, 1.0F).setOverlay(net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY)
+            .setUv(0.0F, 1.0F).setOverlay(shaderData)
             .setLight(0x00F000F0).setNormal(pose, 0.0F, 1.0F, 0.0F);
         vertices.addVertex(pose, 1.0F, 0.0F, 1.0F).setColor(0.45F, 0.92F, 1.0F, alpha)
-            .setUv(1.0F, 1.0F).setOverlay(net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY)
+            .setUv(1.0F, 1.0F).setOverlay(shaderData)
             .setLight(0x00F000F0).setNormal(pose, 0.0F, 1.0F, 0.0F);
         vertices.addVertex(pose, 1.0F, 0.0F, -1.0F).setColor(0.45F, 0.92F, 1.0F, alpha)
-            .setUv(1.0F, 0.0F).setOverlay(net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY)
+            .setUv(1.0F, 0.0F).setOverlay(shaderData)
             .setLight(0x00F000F0).setNormal(pose, 0.0F, 1.0F, 0.0F);
         poseStack.popPose();
+    }
+
+    /** Packs per-effect shader inputs into the overlay attribute unused by this renderer. */
+    private static int shaderData(EffectRenderContext context) {
+        int progress = Math.round(context.progress() * 32767.0F);
+        int seed = Math.floorMod(Long.hashCode(context.seed()), 32768);
+        return OverlayTexture.pack(progress, seed);
     }
 }
