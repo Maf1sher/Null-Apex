@@ -151,20 +151,43 @@ final class ClientScreenCompositor {
         ShaderInstance shader = Objects.requireNonNull(EffectRenderTypes.screenCompositeShader(),
             "screen composite shader is not registered");
 
-        destination.bindWrite(true);
-        RenderSystem.colorMask(true, true, true, true);
-        RenderSystem.depthMask(false);
-        RenderSystem.disableDepthTest();
-        RenderSystem.disableBlend();
+        this.bindCompositeInputs(shader, sourceColor, mask);
+        this.setUniform(shader, "Operation", 0.0F);
+        this.drawComposite(destination, shader);
+    }
 
+    private void compositeWaveDistortion(RenderTarget sourceColor, RenderTarget destination,
+        ScreenEffectFrame screenEffect) {
+        ShaderInstance shader = Objects.requireNonNull(EffectRenderTypes.screenCompositeShader(),
+            "screen composite shader is not registered");
+        WaveDistortionSettings settings = Objects.requireNonNull(
+            screenEffect.settings().waveDistortionSettings(), "wave distortion settings");
+
+        this.bindCompositeInputs(shader, sourceColor, screenEffect.mask());
+        this.setUniform(shader, "Operation", 1.0F);
+        this.setUniform(shader, "WaveAmplitudePixels", settings.amplitudePixels());
+        this.setUniform(shader, "WaveFrequency", settings.frequencyCycles());
+        this.setUniform(shader, "WaveSpeed", settings.speedCyclesPerTick());
+        this.setUniform(shader, "WaveTime", screenEffect.context().ageTicks());
+        this.setUniform(shader, "ViewportWidth", destination.width);
+        this.drawComposite(destination, shader);
+    }
+
+    private void bindCompositeInputs(ShaderInstance shader, RenderTarget sourceColor, ScreenEffectMask mask) {
         shader.setSampler("SceneSampler", sourceColor.getColorTextureId());
         shader.setSampler("MaskSampler", this.screenMaskTarget.getColorTextureId());
         shader.setSampler("DepthSampler", this.screenMaskTarget.getDepthTextureId());
         AbstractUniform maskColor = Objects.requireNonNull(shader.getUniform("MaskColor"), "MaskColor uniform");
         maskColor.set(mask.red(), mask.green(), mask.blue());
-        AbstractUniform maskStrength = Objects.requireNonNull(shader.getUniform("MaskStrength"),
-            "MaskStrength uniform");
-        maskStrength.set(mask.strength());
+        this.setUniform(shader, "MaskStrength", mask.strength());
+    }
+
+    private void drawComposite(RenderTarget destination, ShaderInstance shader) {
+        destination.bindWrite(true);
+        RenderSystem.colorMask(true, true, true, true);
+        RenderSystem.depthMask(false);
+        RenderSystem.disableDepthTest();
+        RenderSystem.disableBlend();
 
         boolean shaderApplied = false;
         try {
@@ -187,7 +210,13 @@ final class ClientScreenCompositor {
     private void compositeEffect(RenderTarget sourceColor, RenderTarget destination, ScreenEffectFrame screenEffect) {
         switch (screenEffect.settings().operation()) {
             case DIAGNOSTIC_MASK_PREVIEW -> this.compositeMask(sourceColor, destination, screenEffect.mask());
+            case MASK_SCOPED_WAVE_DISTORTION -> this.compositeWaveDistortion(sourceColor, destination, screenEffect);
         }
+    }
+
+    private void setUniform(ShaderInstance shader, String name, float value) {
+        AbstractUniform uniform = Objects.requireNonNull(shader.getUniform(name), name + " uniform");
+        uniform.set(value);
     }
 
     private void ensureTargets(int width, int height) {

@@ -51,6 +51,12 @@ public final class DragonEffectCommands {
                             context -> testRing(context.getSource(), readAngles(context))
                         ))
                         .then(withAngles(
+                            Commands.literal("waves").executes(context -> testWaves(
+                                context.getSource(), defaultRingAngles(context.getSource())
+                            )),
+                            context -> testWaves(context.getSource(), readAngles(context))
+                        ))
+                        .then(withAngles(
                             Commands.literal("entity").executes(context -> testEntity(
                                 context.getSource(), EffectAngles.ZERO
                             )),
@@ -105,6 +111,24 @@ public final class DragonEffectCommands {
         startRing(level, position, angles);
         playTestSound(level, position);
         source.sendSuccess(() -> Component.literal("Started the visual-only rune effect test."), false);
+        return 1;
+    }
+
+    private static int testWaves(CommandSourceStack source, EffectAngles angles) {
+        ServerLevel level = source.getLevel();
+        Vec3 position = effectPosition(source);
+        VisualEffectService.start(level, new VisualEffectSpec(
+            EffectVisualIds.DEBUG_WAVE_DISTORTION,
+            position,
+            angles.yaw(),
+            angles.pitch(),
+            angles.roll(),
+            5.0F,
+            DEBUG_EFFECT_LIFETIME_TICKS,
+            level.getRandom().nextLong(),
+            EffectAudience.nearby(128.0)
+        ));
+        source.sendSuccess(() -> Component.literal("Started the visual-only wave distortion test."), false);
         return 1;
     }
 

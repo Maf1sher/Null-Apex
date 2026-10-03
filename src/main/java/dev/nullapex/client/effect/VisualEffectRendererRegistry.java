@@ -20,6 +20,7 @@ public final class VisualEffectRendererRegistry {
             return;
         }
         this.register(EffectVisualIds.DEBUG_RUNE_CIRCLE, new RuneCircleRenderer());
+        this.register(EffectVisualIds.DEBUG_WAVE_DISTORTION, new WaveDistortionRenderer());
         this.initialized = true;
     }
 

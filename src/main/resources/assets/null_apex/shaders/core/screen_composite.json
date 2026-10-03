@@ -10,7 +10,13 @@
     "Position"
   ],
   "uniforms": [
+    { "name": "Operation", "type": "float", "count": 1, "values": [ 0.0 ] },
     { "name": "MaskColor", "type": "float", "count": 3, "values": [ 0.2, 0.8, 1.0 ] },
-    { "name": "MaskStrength", "type": "float", "count": 1, "values": [ 0.45 ] }
+    { "name": "MaskStrength", "type": "float", "count": 1, "values": [ 0.45 ] },
+    { "name": "WaveAmplitudePixels", "type": "float", "count": 1, "values": [ 8.0 ] },
+    { "name": "WaveFrequency", "type": "float", "count": 1, "values": [ 12.0 ] },
+    { "name": "WaveSpeed", "type": "float", "count": 1, "values": [ 0.035 ] },
+    { "name": "WaveTime", "type": "float", "count": 1, "values": [ 0.0 ] },
+    { "name": "ViewportWidth", "type": "float", "count": 1, "values": [ 1.0 ] }
   ]
 }

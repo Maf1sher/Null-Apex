@@ -16,4 +16,18 @@ class ScreenEffectSettingsTest {
     void rejectsMissingOperation() {
         assertThrows(NullPointerException.class, () -> new ScreenEffectSettings(null));
     }
+
+    @Test
+    void waveDistortionRequiresItsSettings() {
+        assertThrows(NullPointerException.class,
+            () -> new ScreenEffectSettings(ScreenEffectOperation.MASK_SCOPED_WAVE_DISTORTION));
+        assertEquals(ScreenEffectOperation.MASK_SCOPED_WAVE_DISTORTION,
+            ScreenEffectSettings.waveDistortion(WaveDistortionSettings.DEBUG_DEFAULT).operation());
+    }
+
+    @Test
+    void rejectsWaveSettingsForTheDiagnosticOperation() {
+        assertThrows(IllegalArgumentException.class, () -> new ScreenEffectSettings(
+            ScreenEffectOperation.DIAGNOSTIC_MASK_PREVIEW, WaveDistortionSettings.DEBUG_DEFAULT));
+    }
 }
