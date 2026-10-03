@@ -9,11 +9,12 @@ import org.junit.jupiter.api.Test;
 class BlackHoleGeometryTest {
     @Test
     void cachesAUnitSphereForTheCoreAndScreenMask() {
-        assertEquals(32 * 64 * 4, BlackHoleGeometry.sphereVertexCount());
-        assertSame(BlackHoleGeometry.sphereVertex(0), BlackHoleGeometry.sphereVertex(0));
+        EffectMesh sphere = BlackHoleGeometry.sphere();
+        assertSame(EffectMeshes.unitSphere(), sphere);
+        assertEquals(32 * 64 * 4, sphere.vertexCount());
 
-        for (int index = 0; index < BlackHoleGeometry.sphereVertexCount(); index++) {
-            BlackHoleGeometry.SphereVertex vertex = BlackHoleGeometry.sphereVertex(index);
+        for (int index = 0; index < sphere.vertexCount(); index++) {
+            EffectMesh.Vertex vertex = sphere.vertex(index);
             assertTrue(Float.isFinite(vertex.x()));
             assertTrue(Float.isFinite(vertex.y()));
             assertTrue(Float.isFinite(vertex.z()));
@@ -26,22 +27,22 @@ class BlackHoleGeometryTest {
 
     @Test
     void cachesBothWarpedDiskLayersWithValidVertexAttributes() {
-        BlackHoleGeometry.DiskLayer primary = BlackHoleGeometry.primaryDisk();
-        BlackHoleGeometry.DiskLayer secondary = BlackHoleGeometry.secondaryDisk();
+        EffectMesh primary = BlackHoleGeometry.primaryDisk();
+        EffectMesh secondary = BlackHoleGeometry.secondaryDisk();
         assertSame(primary, BlackHoleGeometry.primaryDisk());
         assertEquals(6 * 64 * 2 * 4 + 64 * 2 * 4, primary.vertexCount());
         assertEquals(primary.vertexCount(), secondary.vertexCount());
 
-        for (BlackHoleGeometry.DiskLayer layer : new BlackHoleGeometry.DiskLayer[] {primary, secondary}) {
+        for (EffectMesh layer : new EffectMesh[] {primary, secondary}) {
             for (int index = 0; index < layer.vertexCount(); index++) {
-                BlackHoleGeometry.DiskVertex vertex = layer.vertex(index);
+                EffectMesh.Vertex vertex = layer.vertex(index);
                 assertTrue(Float.isFinite(vertex.x()));
                 assertTrue(Float.isFinite(vertex.y()));
                 assertTrue(Float.isFinite(vertex.z()));
                 assertTrue(Float.isFinite(vertex.u()) && vertex.u() >= 0.0F && vertex.u() <= 1.0F);
                 assertTrue(Float.isFinite(vertex.v()) && vertex.v() >= 0.0F && vertex.v() <= 1.0F);
-                assertTrue(Float.isFinite(vertex.opacityScale())
-                    && vertex.opacityScale() > 0.0F && vertex.opacityScale() <= 1.0F);
+                assertTrue(Float.isFinite(vertex.alphaMultiplier())
+                    && vertex.alphaMultiplier() > 0.0F && vertex.alphaMultiplier() <= 1.0F);
             }
         }
     }

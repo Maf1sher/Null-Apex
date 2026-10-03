@@ -95,16 +95,8 @@ final class BlackHoleRenderer implements ScreenEffectRenderer {
         poseStack.pushPose();
         try {
             poseStack.scale(radius, radius, radius);
-            PoseStack.Pose pose = poseStack.last();
-            for (int index = 0; index < BlackHoleGeometry.sphereVertexCount(); index++) {
-                BlackHoleGeometry.SphereVertex vertex = BlackHoleGeometry.sphereVertex(index);
-                vertices.addVertex(pose, vertex.x(), vertex.y(), vertex.z())
-                    .setColor(0.0F, 0.0F, 0.0F, 1.0F)
-                    .setUv(vertex.u(), vertex.v())
-                    .setOverlay(shaderData)
-                    .setLight(0x00F000F0)
-                    .setNormal(pose, vertex.x(), vertex.y(), vertex.z());
-            }
+            BlackHoleGeometry.sphere().emit(vertices, poseStack.last(), 0.0F, 0.0F, 0.0F, 1.0F,
+                shaderData, 0x00F000F0);
         } finally {
             poseStack.popPose();
         }
@@ -114,16 +106,8 @@ final class BlackHoleRenderer implements ScreenEffectRenderer {
         poseStack.pushPose();
         try {
             poseStack.scale(radius, radius, radius);
-            PoseStack.Pose pose = poseStack.last();
-            for (int index = 0; index < BlackHoleGeometry.sphereVertexCount(); index++) {
-                BlackHoleGeometry.SphereVertex vertex = BlackHoleGeometry.sphereVertex(index);
-                vertices.addVertex(pose, vertex.x(), vertex.y(), vertex.z())
-                    .setColor(1.0F, 1.0F, 1.0F, alpha)
-                    .setUv(vertex.u(), vertex.v())
-                    .setOverlay(OverlayTexture.NO_OVERLAY)
-                    .setLight(0x00F000F0)
-                    .setNormal(pose, vertex.x(), vertex.y(), vertex.z());
-            }
+            BlackHoleGeometry.sphere().emit(vertices, poseStack.last(), 1.0F, 1.0F, 1.0F, alpha,
+                OverlayTexture.NO_OVERLAY, 0x00F000F0);
         } finally {
             poseStack.popPose();
         }
@@ -138,22 +122,13 @@ final class BlackHoleRenderer implements ScreenEffectRenderer {
     }
 
     private static void renderAccretionLayer(PoseStack poseStack, VertexConsumer vertices,
-        BlackHoleGeometry.DiskLayer layer, float scale, float rotation, float alpha, float emissionScale,
-        int shaderData) {
+        EffectMesh layer, float scale, float rotation, float alpha, float emissionScale, int shaderData) {
         poseStack.pushPose();
         try {
             poseStack.scale(scale, scale, scale);
             poseStack.mulPose(Axis.ZP.rotation(rotation));
-            PoseStack.Pose pose = poseStack.last();
-            for (int index = 0; index < layer.vertexCount(); index++) {
-                BlackHoleGeometry.DiskVertex vertex = layer.vertex(index);
-                vertices.addVertex(pose, vertex.x(), vertex.y(), vertex.z())
-                    .setColor(emissionScale, emissionScale, emissionScale, alpha * vertex.opacityScale())
-                    .setUv(vertex.u(), vertex.v())
-                    .setOverlay(shaderData)
-                    .setLight(0x00F000F0)
-                    .setNormal(pose, 0.0F, 0.0F, 1.0F);
-            }
+            layer.emit(vertices, poseStack.last(), emissionScale, emissionScale, emissionScale,
+                alpha, shaderData, 0x00F000F0);
         } finally {
             poseStack.popPose();
         }

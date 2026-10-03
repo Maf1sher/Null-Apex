@@ -77,17 +77,8 @@ final class BloomRenderer implements ScreenEffectRenderer {
         poseStack.translate(0.0, 0.025, 0.0);
         poseStack.mulPose(Axis.YP.rotation(rotation));
         poseStack.scale(scale, 1.0F, scale);
-        PoseStack.Pose pose = poseStack.last();
-        addVertex(vertices, pose, -1.0F, -1.0F, 0.0F, 0.0F, alpha);
-        addVertex(vertices, pose, -1.0F, 1.0F, 0.0F, 1.0F, alpha);
-        addVertex(vertices, pose, 1.0F, 1.0F, 1.0F, 1.0F, alpha);
-        addVertex(vertices, pose, 1.0F, -1.0F, 1.0F, 0.0F, alpha);
+        EffectMeshes.horizontalQuad().emit(vertices, poseStack.last(), 1.0F, 1.0F, 1.0F, alpha,
+            0, 0x00F000F0);
         poseStack.popPose();
-    }
-
-    private static void addVertex(VertexConsumer vertices, PoseStack.Pose pose, float x, float z, float u, float v,
-        float alpha) {
-        vertices.addVertex(pose, x, 0.0F, z).setColor(1.0F, 1.0F, 1.0F, alpha)
-            .setUv(u, v).setOverlay(0).setLight(0x00F000F0).setNormal(pose, 0.0F, 1.0F, 0.0F);
     }
 }

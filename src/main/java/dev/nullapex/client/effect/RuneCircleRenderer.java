@@ -112,19 +112,8 @@ final class RuneCircleRenderer implements ScreenEffectRenderer {
         poseStack.translate(0.0, height, 0.0);
         poseStack.mulPose(Axis.YP.rotation(rotation));
         poseStack.scale(scale, 1.0F, scale);
-        PoseStack.Pose pose = poseStack.last();
-        vertices.addVertex(pose, -1.0F, 0.0F, -1.0F).setColor(0.45F, 0.92F, 1.0F, alpha)
-            .setUv(0.0F, 0.0F).setOverlay(shaderData)
-            .setLight(0x00F000F0).setNormal(pose, 0.0F, 1.0F, 0.0F);
-        vertices.addVertex(pose, -1.0F, 0.0F, 1.0F).setColor(0.45F, 0.92F, 1.0F, alpha)
-            .setUv(0.0F, 1.0F).setOverlay(shaderData)
-            .setLight(0x00F000F0).setNormal(pose, 0.0F, 1.0F, 0.0F);
-        vertices.addVertex(pose, 1.0F, 0.0F, 1.0F).setColor(0.45F, 0.92F, 1.0F, alpha)
-            .setUv(1.0F, 1.0F).setOverlay(shaderData)
-            .setLight(0x00F000F0).setNormal(pose, 0.0F, 1.0F, 0.0F);
-        vertices.addVertex(pose, 1.0F, 0.0F, -1.0F).setColor(0.45F, 0.92F, 1.0F, alpha)
-            .setUv(1.0F, 0.0F).setOverlay(shaderData)
-            .setLight(0x00F000F0).setNormal(pose, 0.0F, 1.0F, 0.0F);
+        EffectMeshes.horizontalQuad().emit(vertices, poseStack.last(), 0.45F, 0.92F, 1.0F,
+            alpha, shaderData, 0x00F000F0);
         poseStack.popPose();
     }
 
