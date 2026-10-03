@@ -69,6 +69,12 @@ public final class DragonEffectCommands {
                             context -> testBloom(context.getSource(), readAngles(context))
                         ))
                         .then(withAngles(
+                            Commands.literal("black-hole").executes(context -> testBlackHole(
+                                context.getSource(), defaultRingAngles(context.getSource())
+                            )),
+                            context -> testBlackHole(context.getSource(), readAngles(context))
+                        ))
+                        .then(withAngles(
                             Commands.literal("entity").executes(context -> testEntity(
                                 context.getSource(), EffectAngles.ZERO
                             )),
@@ -177,6 +183,24 @@ public final class DragonEffectCommands {
             EffectAudience.nearby(128.0)
         ));
         source.sendSuccess(() -> Component.literal("Started the visual-only bloom test."), false);
+        return 1;
+    }
+
+    private static int testBlackHole(CommandSourceStack source, EffectAngles angles) {
+        ServerLevel level = source.getLevel();
+        Vec3 position = effectPosition(source);
+        VisualEffectService.start(level, new VisualEffectSpec(
+            EffectVisualIds.DEBUG_BLACK_HOLE,
+            position,
+            angles.yaw(),
+            angles.pitch(),
+            angles.roll(),
+            5.0F,
+            DEBUG_EFFECT_LIFETIME_TICKS,
+            level.getRandom().nextLong(),
+            EffectAudience.nearby(128.0)
+        ));
+        source.sendSuccess(() -> Component.literal("Started the visual-only black-hole effect test."), false);
         return 1;
     }
 

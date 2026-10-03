@@ -16,6 +16,9 @@ public final class EffectVisualIds {
     public static final ResourceLocation DEBUG_BLOOM = ResourceLocation.fromNamespaceAndPath(
         NullApex.MOD_ID, "debug_bloom"
     );
+    public static final ResourceLocation DEBUG_BLACK_HOLE = ResourceLocation.fromNamespaceAndPath(
+        NullApex.MOD_ID, "debug_black_hole"
+    );
 
     private EffectVisualIds() {
     }

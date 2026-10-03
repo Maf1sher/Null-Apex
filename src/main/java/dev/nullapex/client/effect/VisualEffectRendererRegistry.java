@@ -23,6 +23,7 @@ public final class VisualEffectRendererRegistry {
         this.register(EffectVisualIds.DEBUG_WAVE_DISTORTION, new WaveDistortionRenderer());
         this.register(EffectVisualIds.DEBUG_SCENE_BLUR, new SceneBlurRenderer());
         this.register(EffectVisualIds.DEBUG_BLOOM, new BloomRenderer());
+        this.register(EffectVisualIds.DEBUG_BLACK_HOLE, new BlackHoleRenderer());
         this.initialized = true;
     }
 
