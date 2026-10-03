@@ -14,36 +14,57 @@ flat in vec2 effectData;
 
 out vec4 fragColor;
 
+float hash21(vec2 point) {
+    point = fract(point * vec2(123.34, 456.21));
+    point += dot(point, point + 45.32);
+    return fract(point.x * point.y);
+}
+
+float smoothNoise(vec2 point) {
+    vec2 cell = floor(point);
+    vec2 local = fract(point);
+    local = local * local * (3.0 - 2.0 * local);
+    float lower = mix(hash21(cell), hash21(cell + vec2(1.0, 0.0)), local.x);
+    float upper = mix(hash21(cell + vec2(0.0, 1.0)), hash21(cell + vec2(1.0, 1.0)), local.x);
+    return mix(lower, upper, local.y);
+}
+
 void main() {
     float progress = clamp(effectData.x, 0.0, 1.0);
     float seed = clamp(effectData.y, 0.0, 1.0);
-    vec3 color;
-    float alpha;
+    float brightestChannel = max(max(vertexColor.r, vertexColor.g), vertexColor.b);
 
-    if (max(max(vertexColor.r, vertexColor.g), vertexColor.b) < 0.08) {
-        float latitudeShade = sin(texCoord0.y * 3.14159265);
-        color = vertexColor.rgb * ColorModulator.rgb
-            + vec3(0.003, 0.0005, 0.009) * latitudeShade * latitudeShade;
-        alpha = vertexColor.a * ColorModulator.a;
-    } else {
-        vec2 centeredUv = (texCoord0 - vec2(0.5)) * 2.0;
-        float radius = length(centeredUv);
-        float angle = atan(centeredUv.y, centeredUv.x);
-        float innerEdge = exp(-abs(radius - 0.43) * 58.0);
-        float outerEdge = exp(-abs(radius - 0.91) * 24.0);
-        float edgeFade = smoothstep(0.37, 0.44, radius) * (1.0 - smoothstep(0.94, 1.0, radius));
-        float turbulence = 0.84 + 0.16 * sin(angle * 23.0 + radius * 37.0 + progress * 19.0 + seed * 6.2831853);
-        float filaments = 0.90 + 0.10 * sin(angle * 47.0 - radius * 22.0 + seed * 31.0);
-
-        vec3 blue = vec3(0.025, 0.18, 0.72);
-        vec3 violet = vec3(0.40, 0.035, 0.78);
-        vec3 hot = vec3(1.0, 0.58, 0.96);
-        color = mix(blue, violet, smoothstep(0.57, 0.98, radius));
-        color = mix(color, hot, clamp(innerEdge * 0.95, 0.0, 1.0));
-        color = mix(color, vec3(0.32, 0.58, 1.0), clamp(outerEdge * 0.48, 0.0, 1.0));
-        color *= turbulence * filaments * vertexColor.rgb * ColorModulator.rgb;
-        alpha = vertexColor.a * ColorModulator.a * edgeFade * (0.82 + 0.18 * turbulence);
+    if (brightestChannel < 0.08) {
+        // The event-horizon silhouette stays truly dark; the surrounding plasma defines its shape.
+        fragColor = vec4(0.0002, 0.0001, 0.0005, 1.0);
+        return;
     }
 
-    fragColor = linear_fog(vec4(color, alpha), vertexDistance, FogStart, FogEnd, FogColor);
+    vec2 centeredUv = (texCoord0 - vec2(0.5)) * 2.0;
+    float radius = length(centeredUv);
+    float angle = atan(centeredUv.y, centeredUv.x);
+    vec2 angularDirection = vec2(cos(angle), sin(angle));
+    float noiseA = smoothNoise(angularDirection * 4.0
+        + vec2(seed * 9.0 - progress * 4.0, radius * 15.0));
+    float noiseB = smoothNoise(angularDirection * 8.0
+        + vec2(radius * 11.0 + seed * 3.0, radius * 31.0 - progress * 3.0));
+    float density = noiseA * 0.62 + noiseB * 0.38;
+    float spiral = 0.5 + 0.5 * sin(angle * 7.0 - radius * 42.0 + progress * 22.0
+        + (noiseA - 0.5) * 4.0);
+    float filament = pow(max(spiral, 0.0), 12.0);
+    float innerRim = exp(-abs(radius - 0.337) * 72.0);
+    float innerFade = smoothstep(0.305, 0.355, radius);
+    float outerFade = 1.0 - smoothstep(0.96, 1.0, radius);
+    float approachingSide = 0.74 + 0.26 * smoothstep(-0.9, 0.9, cos(angle - progress * 1.8));
+
+    vec3 outerPlasma = mix(vec3(0.22, 0.012, 0.003), vec3(1.0, 0.24, 0.025), density);
+    vec3 innerPlasma = mix(vec3(1.15, 0.38, 0.055), vec3(0.72, 0.88, 1.25),
+        1.0 - smoothstep(0.34, 0.48, radius));
+    vec3 color = mix(outerPlasma, innerPlasma, 1.0 - smoothstep(0.36, 0.86, radius));
+    color += vec3(1.35, 1.12, 0.82) * innerRim;
+    color += vec3(0.75, 0.43, 0.15) * filament * (0.35 + density);
+    color *= approachingSide * vertexColor.rgb * ColorModulator.rgb;
+    float alpha = vertexColor.a * innerFade * outerFade * (0.28 + density * 0.43 + filament * 0.30);
+
+    fragColor = linear_fog(vec4(color, alpha * ColorModulator.a), vertexDistance, FogStart, FogEnd, FogColor);
 }

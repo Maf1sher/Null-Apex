@@ -14,6 +14,11 @@ uniform float WaveTime;
 uniform float ViewportWidth;
 uniform float ViewportHeight;
 uniform float BlurRadiusPixels;
+uniform vec2 LensCenter;
+uniform float LensRadiusPixels;
+uniform float LensDepth;
+uniform float LensStrength;
+uniform float MaxDistortionPixels;
 
 in vec2 texCoord;
 
@@ -35,6 +40,28 @@ void main() {
         vec2 displacedUv = clamp(texCoord + vec2(horizontalOffset, 0.0), vec2(0.0), vec2(1.0));
         vec4 distortedColor = texture(SceneSampler, displacedUv);
         fragColor = vec4(mix(sceneColor.rgb, distortedColor.rgb, mask), sceneColor.a);
+        return;
+    }
+
+    if (Operation > 3.5) {
+        vec2 viewport = vec2(max(ViewportWidth, 1.0), max(ViewportHeight, 1.0));
+        vec2 pixelDelta = (texCoord - LensCenter) * viewport;
+        float distancePixels = length(pixelDelta);
+        float normalizedRadius = distancePixels / max(LensRadiusPixels, 1.0);
+        float innerFade = smoothstep(0.2, 0.36, normalizedRadius);
+        float outerFade = 1.0 - smoothstep(0.88, 1.0, normalizedRadius);
+        float sceneDepth = texture(DepthSampler, texCoord).r;
+        float inFrontOfBackground = step(LensDepth + 0.00025, sceneDepth);
+        float coverage = mask * innerFade * outerFade * inFrontOfBackground;
+        vec2 direction = pixelDelta / max(distancePixels, 1.0);
+        float displacementPixels = MaxDistortionPixels * LensStrength
+            * (0.35 + 0.65 * (1.0 - smoothstep(0.22, 0.9, normalizedRadius)));
+        vec2 displacedUv = clamp(texCoord - direction * displacementPixels / viewport,
+            vec2(0.0), vec2(1.0));
+        float displacedDepth = texture(DepthSampler, displacedUv).r;
+        coverage *= step(LensDepth + 0.00025, displacedDepth);
+        vec4 lensedColor = texture(SceneSampler, displacedUv);
+        fragColor = vec4(mix(sceneColor.rgb, lensedColor.rgb, clamp(coverage, 0.0, 1.0)), sceneColor.a);
         return;
     }
 

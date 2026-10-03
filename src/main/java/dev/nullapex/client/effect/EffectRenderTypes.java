@@ -17,6 +17,7 @@ final class EffectRenderTypes {
     private static ShaderInstance visualEffectShader;
     private static ShaderInstance blackHoleShader;
     private static ShaderInstance screenMaskShader;
+    private static ShaderInstance blackHoleScreenMaskShader;
     private static ShaderInstance screenCompositeShader;
     private static ShaderInstance screenBloomShader;
     private static final RenderStateShard.ShaderStateShard VISUAL_EFFECT_SHADER =
@@ -25,6 +26,8 @@ final class EffectRenderTypes {
         new RenderStateShard.ShaderStateShard(() -> blackHoleShader);
     private static final RenderStateShard.ShaderStateShard SCREEN_MASK_SHADER =
         new RenderStateShard.ShaderStateShard(() -> screenMaskShader);
+    private static final RenderStateShard.ShaderStateShard BLACK_HOLE_SCREEN_MASK_SHADER =
+        new RenderStateShard.ShaderStateShard(() -> blackHoleScreenMaskShader);
     private static final RenderStateShard.OutputStateShard SCREEN_MASK_TARGET =
         new RenderStateShard.OutputStateShard("null_apex_screen_mask_target", () -> { }, () -> { });
     private static final Function<ResourceLocation, RenderType> VISUAL = Util.memoize(
@@ -42,6 +45,9 @@ final class EffectRenderTypes {
     );
     private static final Function<ResourceLocation, RenderType> SCREEN_MASK = Util.memoize(
         EffectRenderTypes::createScreenMask
+    );
+    private static final Function<ResourceLocation, RenderType> BLACK_HOLE_SCREEN_MASK = Util.memoize(
+        EffectRenderTypes::createBlackHoleScreenMask
     );
     private static final Function<ResourceLocation, RenderType> ENTITY_UNSORTED = Util.memoize(
         texture -> createEntity(texture)
@@ -68,6 +74,10 @@ final class EffectRenderTypes {
 
     static RenderType screenMask(ResourceLocation texture) {
         return SCREEN_MASK.apply(texture);
+    }
+
+    static RenderType blackHoleScreenMask(ResourceLocation texture) {
+        return BLACK_HOLE_SCREEN_MASK.apply(texture);
     }
 
     static ShaderInstance screenCompositeShader() {
@@ -100,6 +110,13 @@ final class EffectRenderTypes {
         event.registerShader(
             new ShaderInstance(event.getResourceProvider(), maskShaderId, DefaultVertexFormat.BLOCK),
             shader -> screenMaskShader = shader
+        );
+
+        ResourceLocation blackHoleMaskShaderId = ResourceLocation.fromNamespaceAndPath(NullApex.MOD_ID,
+            "black_hole_screen_mask");
+        event.registerShader(
+            new ShaderInstance(event.getResourceProvider(), blackHoleMaskShaderId, DefaultVertexFormat.BLOCK),
+            shader -> blackHoleScreenMaskShader = shader
         );
 
         ResourceLocation compositeShaderId = ResourceLocation.fromNamespaceAndPath(NullApex.MOD_ID,
@@ -220,6 +237,28 @@ final class EffectRenderTypes {
             .createCompositeState(true);
         return RenderType.create(
             "null_apex_screen_effect_mask",
+            DefaultVertexFormat.BLOCK,
+            VertexFormat.Mode.QUADS,
+            2_097_152,
+            true,
+            true,
+            state
+        );
+    }
+
+    private static RenderType createBlackHoleScreenMask(ResourceLocation texture) {
+        RenderType.CompositeState state = RenderType.CompositeState.builder()
+            .setShaderState(BLACK_HOLE_SCREEN_MASK_SHADER)
+            .setTextureState(new RenderStateShard.TextureStateShard(texture, false, true))
+            .setTransparencyState(RenderStateShard.TRANSLUCENT_TRANSPARENCY)
+            .setDepthTestState(RenderStateShard.LEQUAL_DEPTH_TEST)
+            .setCullState(RenderStateShard.NO_CULL)
+            .setLightmapState(RenderStateShard.LIGHTMAP)
+            .setOutputState(SCREEN_MASK_TARGET)
+            .setWriteMaskState(RenderStateShard.COLOR_WRITE)
+            .createCompositeState(true);
+        return RenderType.create(
+            "null_apex_black_hole_screen_mask",
             DefaultVertexFormat.BLOCK,
             VertexFormat.Mode.QUADS,
             2_097_152,

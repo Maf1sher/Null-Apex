@@ -14,7 +14,10 @@ import java.util.List;
 import java.util.Objects;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ShaderInstance;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
+import org.joml.Matrix4f;
+import org.joml.Vector4f;
 import org.slf4j.Logger;
 
 /** Optional depth-aware per-effect mask composition for client screen effects. */
@@ -81,7 +84,8 @@ final class ClientScreenCompositor {
             boolean needsBlurTarget = screenEffects.stream()
                 .anyMatch(effect -> effect.settings().operation() == ScreenEffectOperation.MASK_SCOPED_SCENE_BLUR);
             boolean needsBloomTargets = screenEffects.stream()
-                .anyMatch(effect -> effect.settings().operation() == ScreenEffectOperation.MASK_SCOPED_BLOOM);
+                .anyMatch(effect -> effect.settings().operation() == ScreenEffectOperation.MASK_SCOPED_BLOOM
+                    || effect.settings().operation() == ScreenEffectOperation.MASK_SCOPED_BLACK_HOLE);
             this.ensureTargets(width, height, needsBlurTarget, needsBloomTargets);
             if (mainTarget.getDepthTextureId() <= 0 || this.screenMaskTarget.getDepthTextureId() <= 0) {
                 throw new IllegalStateException("The main render target has no sampleable depth attachment");
@@ -94,8 +98,7 @@ final class ClientScreenCompositor {
             for (ScreenEffectFrame screenEffect : screenEffects) {
                 this.renderMask(event, manager, mainTarget, screenEffect);
                 RenderTarget destination = currentColor == mainTarget ? this.compositionTarget : mainTarget;
-                this.compositeEffect(currentColor, destination, screenEffect);
-                currentColor = destination;
+                currentColor = this.compositeEffect(currentColor, destination, screenEffect, event);
             }
 
             if (currentColor != mainTarget) {
@@ -202,14 +205,19 @@ final class ClientScreenCompositor {
     }
 
     private void compositeBloom(RenderTarget sourceColor, RenderTarget destination, ScreenEffectFrame screenEffect) {
+        this.compositeBloom(sourceColor, destination, screenEffect.mask().strength(),
+            Objects.requireNonNull(screenEffect.settings().bloomSettings(), "bloom settings"));
+    }
+
+    private void compositeBloom(RenderTarget sourceColor, RenderTarget destination, float maskStrength,
+        BloomSettings settings) {
         ShaderInstance shader = Objects.requireNonNull(EffectRenderTypes.screenBloomShader(),
             "screen bloom shader is not registered");
-        BloomSettings settings = Objects.requireNonNull(screenEffect.settings().bloomSettings(), "bloom settings");
         TextureTarget first = Objects.requireNonNull(this.bloomTargetA, "bloom target A");
         TextureTarget second = Objects.requireNonNull(this.bloomTargetB, "bloom target B");
 
         this.bindBloomInputs(shader, sourceColor);
-        this.setBloomUniforms(shader, settings, sourceColor, screenEffect.mask().strength());
+        this.setBloomUniforms(shader, settings, sourceColor, maskStrength);
         this.setUniform(shader, "Pass", 0.0F);
         this.drawFullscreen(first, shader);
 
@@ -225,7 +233,7 @@ final class ClientScreenCompositor {
 
         this.bindBloomInputs(shader, sourceColor);
         shader.setSampler("BloomSampler", first.getColorTextureId());
-        this.setBloomUniforms(shader, settings, sourceColor, screenEffect.mask().strength());
+        this.setBloomUniforms(shader, settings, sourceColor, maskStrength);
         this.setUniform(shader, "Pass", 3.0F);
         this.drawFullscreen(destination, shader);
     }
@@ -287,13 +295,98 @@ final class ClientScreenCompositor {
         }
     }
 
-    private void compositeEffect(RenderTarget sourceColor, RenderTarget destination, ScreenEffectFrame screenEffect) {
-        switch (screenEffect.settings().operation()) {
-            case DIAGNOSTIC_MASK_PREVIEW -> this.compositeMask(sourceColor, destination, screenEffect.mask());
-            case MASK_SCOPED_WAVE_DISTORTION -> this.compositeWaveDistortion(sourceColor, destination, screenEffect);
-            case MASK_SCOPED_SCENE_BLUR -> this.compositeSceneBlur(sourceColor, destination, screenEffect);
-            case MASK_SCOPED_BLOOM -> this.compositeBloom(sourceColor, destination, screenEffect);
+    private RenderTarget compositeEffect(RenderTarget sourceColor, RenderTarget destination,
+        ScreenEffectFrame screenEffect, RenderLevelStageEvent event) {
+        return switch (screenEffect.settings().operation()) {
+            case DIAGNOSTIC_MASK_PREVIEW -> {
+                this.compositeMask(sourceColor, destination, screenEffect.mask());
+                yield destination;
+            }
+            case MASK_SCOPED_WAVE_DISTORTION -> {
+                this.compositeWaveDistortion(sourceColor, destination, screenEffect);
+                yield destination;
+            }
+            case MASK_SCOPED_SCENE_BLUR -> {
+                this.compositeSceneBlur(sourceColor, destination, screenEffect);
+                yield destination;
+            }
+            case MASK_SCOPED_BLOOM -> {
+                this.compositeBloom(sourceColor, destination, screenEffect);
+                yield destination;
+            }
+            case MASK_SCOPED_BLACK_HOLE -> this.compositeBlackHole(sourceColor, destination, screenEffect, event);
+        };
+    }
+
+    private RenderTarget compositeBlackHole(RenderTarget sourceColor, RenderTarget destination,
+        ScreenEffectFrame screenEffect, RenderLevelStageEvent event) {
+        BlackHoleScreenSettings settings = Objects.requireNonNull(
+            screenEffect.settings().blackHoleScreenSettings(), "black-hole screen settings");
+        BlackHoleProjection projection = this.projectBlackHole(event, screenEffect, destination, settings);
+        RenderTarget bloomSource = sourceColor;
+        RenderTarget bloomDestination = destination;
+
+        if (projection.visible()) {
+            ShaderInstance shader = Objects.requireNonNull(EffectRenderTypes.screenCompositeShader(),
+                "screen composite shader is not registered");
+            this.bindCompositeInputs(shader, sourceColor, screenEffect.mask());
+            this.setUniform(shader, "Operation", 4.0F);
+            AbstractUniform lensCenter = Objects.requireNonNull(shader.getUniform("LensCenter"),
+                "LensCenter uniform");
+            lensCenter.set(projection.centerX(), projection.centerY());
+            this.setUniform(shader, "LensRadiusPixels", projection.radiusPixels());
+            this.setUniform(shader, "LensDepth", projection.depth());
+            this.setUniform(shader, "LensStrength", settings.lensStrength());
+            this.setUniform(shader, "MaxDistortionPixels", settings.maxDistortionPixels());
+            this.setUniform(shader, "ViewportWidth", destination.width);
+            this.setUniform(shader, "ViewportHeight", destination.height);
+            this.drawFullscreen(destination, shader);
+
+            // Lens first, then bloom back into the source target so the two passes never sample their destination.
+            bloomSource = destination;
+            bloomDestination = sourceColor;
         }
+
+        this.compositeBloom(bloomSource, bloomDestination, screenEffect.mask().strength(),
+            settings.bloomSettings());
+        return bloomDestination;
+    }
+
+    private BlackHoleProjection projectBlackHole(RenderLevelStageEvent event, ScreenEffectFrame screenEffect,
+        RenderTarget viewport, BlackHoleScreenSettings settings) {
+        Vec3 cameraPosition = event.getCamera().getPosition();
+        var effectPosition = screenEffect.context().transform().position();
+        Vector4f viewPosition = new Vector4f(
+            (float)(effectPosition.x() - cameraPosition.x),
+            (float)(effectPosition.y() - cameraPosition.y),
+            (float)(effectPosition.z() - cameraPosition.z),
+            1.0F
+        ).mul(new Matrix4f(event.getModelViewMatrix()));
+        Matrix4f projectionMatrix = new Matrix4f(event.getProjectionMatrix());
+        Vector4f clipPosition = new Vector4f(viewPosition).mul(projectionMatrix);
+        if (clipPosition.w() <= 0.0F || viewPosition.z() >= -0.001F
+            || !Float.isFinite(clipPosition.x()) || !Float.isFinite(clipPosition.y())
+            || !Float.isFinite(clipPosition.z()) || !Float.isFinite(clipPosition.w())) {
+            return BlackHoleProjection.INVISIBLE;
+        }
+
+        float inverseW = 1.0F / clipPosition.w();
+        float centerX = clipPosition.x() * inverseW * 0.5F + 0.5F;
+        float centerY = clipPosition.y() * inverseW * 0.5F + 0.5F;
+        float worldRadius = screenEffect.context().scale() * settings.lensRadiusScale();
+        float radiusPixels = Math.abs(projectionMatrix.m00() * worldRadius / viewPosition.z())
+            * viewport.width * 0.5F;
+        float depth = clipPosition.z() * inverseW * 0.5F + 0.5F;
+        if (!Float.isFinite(centerX) || !Float.isFinite(centerY) || !Float.isFinite(radiusPixels)
+            || !Float.isFinite(depth) || radiusPixels < 1.0F) {
+            return BlackHoleProjection.INVISIBLE;
+        }
+        return new BlackHoleProjection(centerX, centerY, radiusPixels, depth, true);
+    }
+
+    private record BlackHoleProjection(float centerX, float centerY, float radiusPixels, float depth,
+        boolean visible) {
+        private static final BlackHoleProjection INVISIBLE = new BlackHoleProjection(0.5F, 0.5F, 1.0F, 1.0F, false);
     }
 
     private void setUniform(ShaderInstance shader, String name, float value) {

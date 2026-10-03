@@ -20,6 +20,11 @@
     { "name": "WaveTime", "type": "float", "count": 1, "values": [ 0.0 ] },
     { "name": "ViewportWidth", "type": "float", "count": 1, "values": [ 1.0 ] },
     { "name": "ViewportHeight", "type": "float", "count": 1, "values": [ 1.0 ] },
-    { "name": "BlurRadiusPixels", "type": "float", "count": 1, "values": [ 8.0 ] }
+    { "name": "BlurRadiusPixels", "type": "float", "count": 1, "values": [ 8.0 ] },
+    { "name": "LensCenter", "type": "float", "count": 2, "values": [ 0.5, 0.5 ] },
+    { "name": "LensRadiusPixels", "type": "float", "count": 1, "values": [ 128.0 ] },
+    { "name": "LensDepth", "type": "float", "count": 1, "values": [ 0.5 ] },
+    { "name": "LensStrength", "type": "float", "count": 1, "values": [ 0.8 ] },
+    { "name": "MaxDistortionPixels", "type": "float", "count": 1, "values": [ 24.0 ] }
   ]
 }
