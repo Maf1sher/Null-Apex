@@ -29,6 +29,7 @@ final class ClientScreenCompositor {
     private TextureTarget compositionTarget;
     private TextureTarget screenMaskTarget;
     private boolean hadScreenEffects;
+    private boolean failAfterCompositionOnce;
     private int unavailableWidth = -1;
     private int unavailableHeight = -1;
 
@@ -93,8 +94,13 @@ final class ClientScreenCompositor {
                 mainTarget.bindWrite(true);
                 currentColor.blitToScreen(mainTarget.viewWidth, mainTarget.viewHeight);
             }
+            if (this.failAfterCompositionOnce) {
+                this.failAfterCompositionOnce = false;
+                throw new IllegalStateException("Screen compositor failure injection");
+            }
             this.restoreMainTargetState(mainTarget);
         } catch (RuntimeException exception) {
+            this.failAfterCompositionOnce = false;
             if (sceneCaptured) {
                 this.restoreCapturedScene(mainTarget);
             } else {
@@ -110,15 +116,22 @@ final class ClientScreenCompositor {
 
     void onLevelUnload() {
         this.hadScreenEffects = false;
+        this.failAfterCompositionOnce = false;
         this.unavailableWidth = -1;
         this.unavailableHeight = -1;
         this.releaseTargets();
     }
 
     void onResourceReload() {
+        this.failAfterCompositionOnce = false;
         this.unavailableWidth = -1;
         this.unavailableHeight = -1;
         this.releaseTargets();
+    }
+
+    boolean armFailureAfterCompositionOnce() {
+        this.failAfterCompositionOnce = true;
+        return true;
     }
 
     private void renderMask(RenderLevelStageEvent event, ClientVisualEffectManager manager, RenderTarget mainTarget,

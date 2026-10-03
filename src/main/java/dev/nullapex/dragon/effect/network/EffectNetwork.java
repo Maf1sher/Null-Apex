@@ -16,6 +16,12 @@ public final class EffectNetwork {
     @SubscribeEvent
     public static void registerPayloads(RegisterPayloadHandlersEvent event) {
         var registrar = event.registrar("2");
+        registrar.playToClient(ArmScreenCompositorFailurePayload.TYPE,
+            ArmScreenCompositorFailurePayload.STREAM_CODEC, (payload, context) -> {
+                if (FMLEnvironment.dist == Dist.CLIENT) {
+                    context.enqueueWork(ClientEffectRuntime::armScreenCompositorFailureOnce);
+                }
+            });
         registrar.playToClient(StartVisualEffectPayload.TYPE, StartVisualEffectPayload.STREAM_CODEC,
             (payload, context) -> {
                 if (FMLEnvironment.dist == Dist.CLIENT) {

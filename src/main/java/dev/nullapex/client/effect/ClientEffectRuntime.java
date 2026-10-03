@@ -86,4 +86,9 @@ public final class ClientEffectRuntime {
             compositor.onResourceReload();
         }
     }
+
+    public static boolean armScreenCompositorFailureOnce() {
+        ClientScreenCompositor compositor = screenCompositor;
+        return compositor != null && compositor.armFailureAfterCompositionOnce();
+    }
 }
