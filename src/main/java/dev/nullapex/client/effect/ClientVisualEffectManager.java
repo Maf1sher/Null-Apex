@@ -8,7 +8,10 @@ import dev.nullapex.dragon.effect.network.StopVisualEffectPayload;
 import dev.nullapex.dragon.effect.network.UpdateVisualEffectPayload;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import net.minecraft.client.Minecraft;
@@ -95,7 +98,7 @@ public final class ClientVisualEffectManager {
         Vec3 cameraPosition = event.getCamera().getPosition();
         PoseStack poseStack = event.getPoseStack();
         MultiBufferSource.BufferSource buffers = minecraft.renderBuffers().bufferSource();
-        Set<RenderType> usedRenderTypes = new HashSet<>();
+        Set<RenderType> usedRenderTypes = new LinkedHashSet<>();
         poseStack.pushPose();
         poseStack.translate(-cameraPosition.x, -cameraPosition.y, -cameraPosition.z);
         try {
@@ -103,30 +106,34 @@ public final class ClientVisualEffectManager {
                 this.rendererRegistry.find(effect.effectId()).ifPresent(renderer -> {
                     StartVisualEffectPayload payload = effect.payload();
                     EffectTransform transform = effect.interpolatedTransform(gameTime, partialTick);
-                    double cullingRadius = payload.scale();
-                    AABB renderBounds = new AABB(
-                        transform.position().x() - cullingRadius,
-                        transform.position().y() - cullingRadius,
-                        transform.position().z() - cullingRadius,
-                        transform.position().x() + cullingRadius,
-                        transform.position().y() + cullingRadius,
-                        transform.position().z() + cullingRadius
-                    );
-                    if (!event.getFrustum().isVisible(renderBounds)) {
-                        return;
-                    }
-                    double age = EffectTimeline.ageTicks(gameTime, partialTick, payload.startGameTime());
+                    float age = (float)EffectTimeline.ageTicks(gameTime, partialTick, payload.startGameTime());
                     float progress = EffectTimeline.progress(
                         gameTime, partialTick, payload.startGameTime(), payload.durationTicks()
                     );
+                    EffectRenderContext context = new EffectRenderContext(effect, transform, age, progress,
+                        partialTick);
+                    AABB renderBounds = this.validatedCullingBounds(renderer, context);
+                    if (!event.getFrustum().isVisible(renderBounds)) {
+                        return;
+                    }
+                    List<EffectRenderPass> renderPasses = List.copyOf(renderer.renderPasses(context));
+                    Set<String> passIds = new HashSet<>();
+                    for (EffectRenderPass renderPass : renderPasses) {
+                        if (!passIds.add(renderPass.id())) {
+                            throw new IllegalStateException("Duplicate render pass ID '" + renderPass.id()
+                                + "' for effect " + effect.effectId());
+                        }
+                    }
                     poseStack.pushPose();
                     try {
                         poseStack.translate(transform.position().x(), transform.position().y(),
                             transform.position().z());
                         EffectRenderTransform.applyRotation(poseStack, transform.yaw(), transform.pitch(),
                             transform.roll());
-                        usedRenderTypes.add(renderer.renderType());
-                        renderer.render(effect, (float)age, progress, poseStack, buffers);
+                        for (EffectRenderPass renderPass : renderPasses) {
+                            usedRenderTypes.add(renderPass.renderType());
+                            renderer.render(context, renderPass, poseStack, buffers);
+                        }
                     } finally {
                         poseStack.popPose();
                     }
@@ -138,6 +145,17 @@ public final class ClientVisualEffectManager {
                 buffers.endBatch(renderType);
             }
         }
+    }
+
+    private AABB validatedCullingBounds(VisualEffectRenderer renderer, EffectRenderContext context) {
+        AABB bounds = Objects.requireNonNull(renderer.cullingBounds(context), "cullingBounds");
+        if (!Double.isFinite(bounds.minX) || !Double.isFinite(bounds.minY) || !Double.isFinite(bounds.minZ)
+            || !Double.isFinite(bounds.maxX) || !Double.isFinite(bounds.maxY) || !Double.isFinite(bounds.maxZ)
+            || bounds.minX > bounds.maxX || bounds.minY > bounds.maxY || bounds.minZ > bounds.maxZ) {
+            throw new IllegalStateException("Renderer returned invalid world-space culling bounds for effect "
+                + context.effect().effectId());
+        }
+        return bounds;
     }
 
     void onLevelUnload(ClientLevel level) {

@@ -5,9 +5,11 @@ import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
 import dev.nullapex.NullApex;
 import dev.nullapex.dragon.effect.EffectTimeline;
+import java.util.List;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.phys.AABB;
 
 /** Textured, layered sample renderer that also serves as a debug test for world-space VFX. */
 final class RuneCircleRenderer implements VisualEffectRenderer {
@@ -15,28 +17,51 @@ final class RuneCircleRenderer implements VisualEffectRenderer {
         NullApex.MOD_ID, "textures/effect/rune_circle.png"
     );
     private static final RenderType RENDER_TYPE = EffectRenderTypes.visual(TEXTURE);
+    private static final String OUTER_PASS = "outer";
+    private static final String MIDDLE_PASS = "middle";
+    private static final String INNER_PASS = "inner";
+    private static final List<EffectRenderPass> RENDER_PASSES = List.of(
+        new EffectRenderPass(OUTER_PASS, RENDER_TYPE),
+        new EffectRenderPass(MIDDLE_PASS, RENDER_TYPE),
+        new EffectRenderPass(INNER_PASS, RENDER_TYPE)
+    );
 
     @Override
-    public void render(
-        VisualEffectInstance effect,
-        float ageTicks,
-        float progress,
-        PoseStack poseStack,
-        MultiBufferSource bufferSource
-    ) {
-        float entrance = EffectTimeline.easeOutCubic(Math.min(1.0F, progress / 0.15F));
-        float alpha = EffectTimeline.fadeEnvelope(progress, 0.10F, 0.25F);
-        float worldScale = effect.payload().scale() * entrance;
-        VertexConsumer vertices = bufferSource.getBuffer(RENDER_TYPE);
-
-        renderLayer(poseStack, vertices, worldScale, ageTicks * 0.035F, alpha, 0.30F);
-        renderLayer(poseStack, vertices, worldScale * 0.72F, -ageTicks * 0.052F, alpha, 0.20F);
-        renderLayer(poseStack, vertices, worldScale * 0.43F, ageTicks * 0.075F, alpha, 0.10F);
+    public List<EffectRenderPass> renderPasses(EffectRenderContext context) {
+        return RENDER_PASSES;
     }
 
     @Override
-    public RenderType renderType() {
-        return RENDER_TYPE;
+    public void render(
+        EffectRenderContext context,
+        EffectRenderPass pass,
+        PoseStack poseStack,
+        MultiBufferSource bufferSource
+    ) {
+        float entrance = EffectTimeline.easeOutCubic(Math.min(1.0F, context.progress() / 0.15F));
+        float alpha = EffectTimeline.fadeEnvelope(context.progress(), 0.10F, 0.25F);
+        float worldScale = context.scale() * entrance;
+        VertexConsumer vertices = bufferSource.getBuffer(RENDER_TYPE);
+
+        switch (pass.id()) {
+            case OUTER_PASS -> renderLayer(poseStack, vertices, worldScale,
+                context.ageTicks() * 0.035F, alpha, 0.30F);
+            case MIDDLE_PASS -> renderLayer(poseStack, vertices, worldScale * 0.72F,
+                -context.ageTicks() * 0.052F, alpha, 0.20F);
+            case INNER_PASS -> renderLayer(poseStack, vertices, worldScale * 0.43F,
+                context.ageTicks() * 0.075F, alpha, 0.10F);
+            default -> throw new IllegalArgumentException("Unknown rune circle render pass: " + pass.id());
+        }
+    }
+
+    @Override
+    public AABB cullingBounds(EffectRenderContext context) {
+        double maximumHeight = 0.30;
+        double radius = Math.sqrt(2.0 * context.scale() * context.scale() + maximumHeight * maximumHeight);
+        double x = context.transform().position().x();
+        double y = context.transform().position().y();
+        double z = context.transform().position().z();
+        return new AABB(x - radius, y - radius, z - radius, x + radius, y + radius, z + radius);
     }
 
     private static void renderLayer(
