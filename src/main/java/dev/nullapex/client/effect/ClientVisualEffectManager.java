@@ -1,6 +1,8 @@
 package dev.nullapex.client.effect;
 
+import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexSorting;
 import dev.nullapex.dragon.effect.EffectTimeline;
 import dev.nullapex.dragon.effect.EffectTransform;
 import dev.nullapex.dragon.effect.network.StartVisualEffectPayload;
@@ -23,6 +25,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import org.joml.Matrix4f;
 
 /** Instance-owned state and rendering for transient client visual effects. */
 public final class ClientVisualEffectManager {
@@ -183,20 +186,40 @@ public final class ClientVisualEffectManager {
             effect.renderer().screenMaskRenderType(effect.context()), "screenMaskRenderType");
         EffectTransform transform = effect.context().transform();
 
-        poseStack.pushPose();
-        poseStack.translate(-cameraPosition.x, -cameraPosition.y, -cameraPosition.z);
+        RenderSystem.backupProjectionMatrix();
+        var modelViewStack = RenderSystem.getModelViewStack();
+        modelViewStack.pushMatrix();
         try {
+            // AFTER_LEVEL does not provide the camera-oriented world pose stack used by AFTER_PARTICLES.
+            RenderSystem.setProjectionMatrix(new Matrix4f(event.getProjectionMatrix()),
+                VertexSorting.DISTANCE_TO_ORIGIN);
+            modelViewStack.set(event.getModelViewMatrix());
+            RenderSystem.applyModelViewMatrix();
+
             poseStack.pushPose();
             try {
-                poseStack.translate(transform.position().x(), transform.position().y(), transform.position().z());
-                EffectRenderTransform.applyRotation(poseStack, transform.yaw(), transform.pitch(), transform.roll());
-                effect.renderer().renderScreenMask(effect.context(), maskRenderType, poseStack, buffers);
+                poseStack.translate(-cameraPosition.x, -cameraPosition.y, -cameraPosition.z);
+                poseStack.pushPose();
+                try {
+                    poseStack.translate(transform.position().x(), transform.position().y(),
+                        transform.position().z());
+                    EffectRenderTransform.applyRotation(poseStack, transform.yaw(), transform.pitch(),
+                        transform.roll());
+                    effect.renderer().renderScreenMask(effect.context(), maskRenderType, poseStack, buffers);
+                } finally {
+                    poseStack.popPose();
+                }
             } finally {
                 poseStack.popPose();
+                buffers.endBatch(maskRenderType);
             }
         } finally {
-            poseStack.popPose();
-            buffers.endBatch(maskRenderType);
+            try {
+                modelViewStack.popMatrix();
+                RenderSystem.applyModelViewMatrix();
+            } finally {
+                RenderSystem.restoreProjectionMatrix();
+            }
         }
     }
 
