@@ -13,11 +13,12 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.AABB;
 
 /** Textured, layered sample renderer that also serves as a debug test for world-space VFX. */
-final class RuneCircleRenderer implements VisualEffectRenderer {
+final class RuneCircleRenderer implements ScreenEffectRenderer {
     private static final ResourceLocation TEXTURE = ResourceLocation.fromNamespaceAndPath(
         NullApex.MOD_ID, "textures/effect/rune_circle.png"
     );
     private static final RenderType RENDER_TYPE = EffectRenderTypes.debugVisual(TEXTURE);
+    private static final RenderType SCREEN_MASK_RENDER_TYPE = EffectRenderTypes.screenMask(TEXTURE);
     private static final String OUTER_PASS = "outer";
     private static final String MIDDLE_PASS = "middle";
     private static final String INNER_PASS = "inner";
@@ -64,6 +65,33 @@ final class RuneCircleRenderer implements VisualEffectRenderer {
         double y = context.transform().position().y();
         double z = context.transform().position().z();
         return new AABB(x - radius, y - radius, z - radius, x + radius, y + radius, z + radius);
+    }
+
+    @Override
+    public ScreenEffectMask screenEffectMask(EffectRenderContext context) {
+        int color = Long.hashCode(context.seed());
+        float red = 0.25F + ((color >>> 16) & 0xFF) / 255.0F * 0.65F;
+        float green = 0.25F + ((color >>> 8) & 0xFF) / 255.0F * 0.65F;
+        float blue = 0.25F + (color & 0xFF) / 255.0F * 0.65F;
+        return new ScreenEffectMask(red, green, blue, 0.45F);
+    }
+
+    @Override
+    public RenderType screenMaskRenderType(EffectRenderContext context) {
+        return SCREEN_MASK_RENDER_TYPE;
+    }
+
+    @Override
+    public void renderScreenMask(EffectRenderContext context, RenderType maskRenderType, PoseStack poseStack,
+        MultiBufferSource bufferSource) {
+        float entrance = EffectTimeline.easeOutCubic(Math.min(1.0F, context.progress() / 0.15F));
+        float alpha = EffectTimeline.fadeEnvelope(context.progress(), 0.10F, 0.25F);
+        float worldScale = context.scale() * entrance;
+        VertexConsumer vertices = bufferSource.getBuffer(maskRenderType);
+
+        renderLayer(poseStack, vertices, worldScale, context.ageTicks() * 0.035F, alpha, 0.30F, 0);
+        renderLayer(poseStack, vertices, worldScale * 0.72F, -context.ageTicks() * 0.052F, alpha, 0.20F, 0);
+        renderLayer(poseStack, vertices, worldScale * 0.43F, context.ageTicks() * 0.075F, alpha, 0.10F, 0);
     }
 
     private static void renderLayer(

@@ -1,0 +1,16 @@
+{
+  "vertex": "null_apex:screen_composite",
+  "fragment": "null_apex:screen_composite",
+  "samplers": [
+    { "name": "SceneSampler" },
+    { "name": "MaskSampler" },
+    { "name": "DepthSampler" }
+  ],
+  "attributes": [
+    "Position"
+  ],
+  "uniforms": [
+    { "name": "MaskColor", "type": "float", "count": 3, "values": [ 0.2, 0.8, 1.0 ] },
+    { "name": "MaskStrength", "type": "float", "count": 1, "values": [ 0.45 ] }
+  ]
+}

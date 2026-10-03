@@ -3,13 +3,21 @@ package dev.nullapex.client.effect;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.pipeline.TextureTarget;
 import com.mojang.blaze3d.platform.GlStateManager;
+import com.mojang.blaze3d.shaders.AbstractUniform;
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.BufferUploader;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.logging.LogUtils;
+import java.util.List;
+import java.util.Objects;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.ShaderInstance;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import org.slf4j.Logger;
 
-/** Optional scene-color capture and passthrough composition for client screen effects. */
+/** Optional depth-aware per-effect mask composition for client screen effects. */
 final class ClientScreenCompositor {
     private static final Logger LOGGER = LogUtils.getLogger();
     private static final int READ_FRAMEBUFFER = 0x8CA8;
@@ -18,31 +26,33 @@ final class ClientScreenCompositor {
     private static final int NEAREST_FILTER = 0x2600;
 
     private TextureTarget sceneColorTarget;
-    private volatile boolean enabled;
+    private TextureTarget compositionTarget;
+    private TextureTarget screenMaskTarget;
+    private boolean hadScreenEffects;
     private int unavailableWidth = -1;
     private int unavailableHeight = -1;
 
-    void setEnabled(boolean enabled) {
-        if (enabled && !this.enabled) {
-            this.unavailableWidth = -1;
-            this.unavailableHeight = -1;
-        }
-        this.enabled = enabled;
-    }
-
-    void render(RenderLevelStageEvent event) {
+    void render(RenderLevelStageEvent event, ClientVisualEffectManager manager, List<ScreenEffectFrame> screenEffects) {
         if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_LEVEL) {
             return;
         }
 
-        if (!this.enabled) {
-            this.releaseSceneColorTarget();
+        if (screenEffects.isEmpty()) {
+            this.hadScreenEffects = false;
+            this.unavailableWidth = -1;
+            this.unavailableHeight = -1;
+            this.releaseTargets();
             return;
         }
+        if (!this.hadScreenEffects) {
+            this.unavailableWidth = -1;
+            this.unavailableHeight = -1;
+        }
+        this.hadScreenEffects = true;
 
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.level == null) {
-            this.releaseSceneColorTarget();
+        if (minecraft.level == null || manager == null) {
+            this.releaseTargets();
             return;
         }
 
@@ -50,7 +60,7 @@ final class ClientScreenCompositor {
         int width = mainTarget.width;
         int height = mainTarget.height;
         if (width <= 0 || height <= 0) {
-            this.releaseSceneColorTarget();
+            this.releaseTargets();
             return;
         }
         if (width != this.unavailableWidth || height != this.unavailableHeight) {
@@ -63,12 +73,26 @@ final class ClientScreenCompositor {
 
         boolean sceneCaptured = false;
         try {
-            this.ensureTarget(width, height);
+            this.ensureTargets(width, height);
+            if (mainTarget.getDepthTextureId() <= 0 || this.screenMaskTarget.getDepthTextureId() <= 0) {
+                throw new IllegalStateException("The main render target has no sampleable depth attachment");
+            }
+
             this.captureSceneColor(mainTarget, this.sceneColorTarget);
             sceneCaptured = true;
 
-            mainTarget.bindWrite(true);
-            this.sceneColorTarget.blitToScreen(mainTarget.viewWidth, mainTarget.viewHeight);
+            RenderTarget currentColor = mainTarget;
+            for (ScreenEffectFrame screenEffect : screenEffects) {
+                this.renderMask(event, manager, mainTarget, screenEffect);
+                RenderTarget destination = currentColor == mainTarget ? this.compositionTarget : mainTarget;
+                this.compositeMask(currentColor, destination, screenEffect.mask());
+                currentColor = destination;
+            }
+
+            if (currentColor != mainTarget) {
+                mainTarget.bindWrite(true);
+                currentColor.blitToScreen(mainTarget.viewWidth, mainTarget.viewHeight);
+            }
             this.restoreMainTargetState(mainTarget);
         } catch (RuntimeException exception) {
             if (sceneCaptured) {
@@ -78,33 +102,89 @@ final class ClientScreenCompositor {
             }
             this.unavailableWidth = width;
             this.unavailableHeight = height;
-            this.releaseSceneColorTarget();
-            LOGGER.warn("Screen-effect compositing is unavailable at {}x{}; continuing without it.",
+            this.releaseTargets();
+            LOGGER.warn("Depth-aware screen effects are unavailable at {}x{}; continuing without them.",
                 width, height, exception);
         }
     }
 
     void onLevelUnload() {
-        this.enabled = false;
+        this.hadScreenEffects = false;
         this.unavailableWidth = -1;
         this.unavailableHeight = -1;
-        this.releaseSceneColorTarget();
+        this.releaseTargets();
     }
 
     void onResourceReload() {
         this.unavailableWidth = -1;
         this.unavailableHeight = -1;
-        this.releaseSceneColorTarget();
+        this.releaseTargets();
     }
 
-    private void ensureTarget(int width, int height) {
-        if (this.sceneColorTarget == null) {
-            this.sceneColorTarget = new TextureTarget(width, height, false, Minecraft.ON_OSX);
-            this.sceneColorTarget.setFilterMode(NEAREST_FILTER);
-        } else if (this.sceneColorTarget.width != width || this.sceneColorTarget.height != height) {
-            this.sceneColorTarget.resize(width, height, Minecraft.ON_OSX);
-            this.sceneColorTarget.setFilterMode(NEAREST_FILTER);
+    private void renderMask(RenderLevelStageEvent event, ClientVisualEffectManager manager, RenderTarget mainTarget,
+        ScreenEffectFrame screenEffect) {
+        this.screenMaskTarget.setClearColor(0.0F, 0.0F, 0.0F, 0.0F);
+        this.screenMaskTarget.clear(false);
+        this.screenMaskTarget.copyDepthFrom(mainTarget);
+        this.screenMaskTarget.bindWrite(true);
+        try {
+            manager.renderScreenMask(event, screenEffect);
+        } finally {
+            this.screenMaskTarget.unbindWrite();
         }
+    }
+
+    private void compositeMask(RenderTarget sourceColor, RenderTarget destination, ScreenEffectMask mask) {
+        ShaderInstance shader = Objects.requireNonNull(EffectRenderTypes.screenCompositeShader(),
+            "screen composite shader is not registered");
+
+        destination.bindWrite(true);
+        RenderSystem.colorMask(true, true, true, true);
+        RenderSystem.depthMask(false);
+        RenderSystem.disableDepthTest();
+        RenderSystem.disableBlend();
+
+        shader.setSampler("SceneSampler", sourceColor.getColorTextureId());
+        shader.setSampler("MaskSampler", this.screenMaskTarget.getColorTextureId());
+        shader.setSampler("DepthSampler", this.screenMaskTarget.getDepthTextureId());
+        AbstractUniform maskColor = Objects.requireNonNull(shader.getUniform("MaskColor"), "MaskColor uniform");
+        maskColor.set(mask.red(), mask.green(), mask.blue());
+        AbstractUniform maskStrength = Objects.requireNonNull(shader.getUniform("MaskStrength"),
+            "MaskStrength uniform");
+        maskStrength.set(mask.strength());
+
+        boolean shaderApplied = false;
+        try {
+            shader.apply();
+            shaderApplied = true;
+            BufferBuilder builder = RenderSystem.renderThreadTesselator()
+                .begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION);
+            builder.addVertex(0.0F, 0.0F, 0.0F);
+            builder.addVertex(1.0F, 0.0F, 0.0F);
+            builder.addVertex(1.0F, 1.0F, 0.0F);
+            builder.addVertex(0.0F, 1.0F, 0.0F);
+            BufferUploader.draw(builder.buildOrThrow());
+        } finally {
+            if (shaderApplied) {
+                shader.clear();
+            }
+        }
+    }
+
+    private void ensureTargets(int width, int height) {
+        this.sceneColorTarget = this.ensureTarget(this.sceneColorTarget, width, height, false);
+        this.compositionTarget = this.ensureTarget(this.compositionTarget, width, height, false);
+        this.screenMaskTarget = this.ensureTarget(this.screenMaskTarget, width, height, true);
+    }
+
+    private TextureTarget ensureTarget(TextureTarget target, int width, int height, boolean useDepth) {
+        if (target == null) {
+            target = new TextureTarget(width, height, useDepth, Minecraft.ON_OSX);
+        } else if (target.width != width || target.height != height) {
+            target.resize(width, height, Minecraft.ON_OSX);
+        }
+        target.setFilterMode(NEAREST_FILTER);
+        return target;
     }
 
     private void captureSceneColor(RenderTarget mainTarget, RenderTarget captureTarget) {
@@ -139,13 +219,22 @@ final class ClientScreenCompositor {
         RenderSystem.disableBlend();
     }
 
-    private void releaseSceneColorTarget() {
-        TextureTarget target = this.sceneColorTarget;
+    private void releaseTargets() {
+        TextureTarget sceneColor = this.sceneColorTarget;
+        TextureTarget composition = this.compositionTarget;
+        TextureTarget mask = this.screenMaskTarget;
         this.sceneColorTarget = null;
+        this.compositionTarget = null;
+        this.screenMaskTarget = null;
+        this.releaseTarget(sceneColor);
+        this.releaseTarget(composition);
+        this.releaseTarget(mask);
+    }
+
+    private void releaseTarget(TextureTarget target) {
         if (target == null) {
             return;
         }
-
         if (RenderSystem.isOnRenderThreadOrInit()) {
             target.destroyBuffers();
         } else {

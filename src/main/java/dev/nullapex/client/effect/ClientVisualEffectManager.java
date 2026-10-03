@@ -6,6 +6,7 @@ import dev.nullapex.dragon.effect.EffectTransform;
 import dev.nullapex.dragon.effect.network.StartVisualEffectPayload;
 import dev.nullapex.dragon.effect.network.StopVisualEffectPayload;
 import dev.nullapex.dragon.effect.network.UpdateVisualEffectPayload;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -82,14 +83,9 @@ public final class ClientVisualEffectManager {
         if (level == null) {
             return;
         }
-        ResourceLocation currentDimension = level.dimension().location();
         long gameTime = level.getGameTime();
         float partialTick = event.getPartialTick().getGameTimeDeltaPartialTick(false);
-        this.activeEffects.entrySet().removeIf(entry -> {
-            StartVisualEffectPayload payload = entry.getValue().payload();
-            return !payload.dimensionId().equals(currentDimension)
-                || EffectTimeline.isFinished(gameTime, payload.startGameTime(), payload.durationTicks());
-        });
+        this.removeFinishedEffects(level, gameTime);
 
         if (this.activeEffects.isEmpty()) {
             return;
@@ -104,14 +100,8 @@ public final class ClientVisualEffectManager {
         try {
             for (VisualEffectInstance effect : this.activeEffects.values()) {
                 this.rendererRegistry.find(effect.effectId()).ifPresent(renderer -> {
-                    StartVisualEffectPayload payload = effect.payload();
-                    EffectTransform transform = effect.interpolatedTransform(gameTime, partialTick);
-                    float age = (float)EffectTimeline.ageTicks(gameTime, partialTick, payload.startGameTime());
-                    float progress = EffectTimeline.progress(
-                        gameTime, partialTick, payload.startGameTime(), payload.durationTicks()
-                    );
-                    EffectRenderContext context = new EffectRenderContext(effect, transform, age, progress,
-                        partialTick);
+                    EffectRenderContext context = this.createRenderContext(effect, gameTime, partialTick);
+                    EffectTransform transform = context.transform();
                     AABB renderBounds = this.validatedCullingBounds(renderer, context);
                     if (!event.getFrustum().isVisible(renderBounds)) {
                         return;
@@ -147,6 +137,67 @@ public final class ClientVisualEffectManager {
         }
     }
 
+    List<ScreenEffectFrame> screenEffects(net.neoforged.neoforge.client.event.RenderLevelStageEvent event) {
+        Minecraft minecraft = Minecraft.getInstance();
+        ClientLevel level = minecraft.level;
+        this.synchronizeLevel(level);
+        if (level == null) {
+            return List.of();
+        }
+
+        long gameTime = level.getGameTime();
+        float partialTick = event.getPartialTick().getGameTimeDeltaPartialTick(false);
+        this.removeFinishedEffects(level, gameTime);
+        if (this.activeEffects.isEmpty()) {
+            return List.of();
+        }
+
+        List<ScreenEffectFrame> screenEffects = new ArrayList<>();
+        for (VisualEffectInstance effect : this.activeEffects.values()) {
+            VisualEffectRenderer renderer = this.rendererRegistry.find(effect.effectId()).orElse(null);
+            if (!(renderer instanceof ScreenEffectRenderer screenRenderer)) {
+                continue;
+            }
+
+            EffectRenderContext context = this.createRenderContext(effect, gameTime, partialTick);
+            if (!event.getFrustum().isVisible(this.validatedCullingBounds(renderer, context))) {
+                continue;
+            }
+            ScreenEffectMask mask = Objects.requireNonNull(screenRenderer.screenEffectMask(context),
+                "screenEffectMask");
+            if (mask.strength() > 0.0F) {
+                screenEffects.add(new ScreenEffectFrame(context, screenRenderer, mask));
+            }
+        }
+        return List.copyOf(screenEffects);
+    }
+
+    void renderScreenMask(net.neoforged.neoforge.client.event.RenderLevelStageEvent event, ScreenEffectFrame effect) {
+        Minecraft minecraft = Minecraft.getInstance();
+        Vec3 cameraPosition = event.getCamera().getPosition();
+        PoseStack poseStack = event.getPoseStack();
+        MultiBufferSource.BufferSource buffers = minecraft.renderBuffers().bufferSource();
+        RenderType maskRenderType = Objects.requireNonNull(
+            effect.renderer().screenMaskRenderType(effect.context()), "screenMaskRenderType");
+        EffectTransform transform = effect.context().transform();
+
+        poseStack.pushPose();
+        poseStack.translate(-cameraPosition.x, -cameraPosition.y, -cameraPosition.z);
+        try {
+            poseStack.pushPose();
+            try {
+                poseStack.translate(transform.position().x(), transform.position().y(), transform.position().z());
+                EffectRenderTransform.applyRotation(poseStack, transform.yaw(), transform.pitch(), transform.roll());
+                effect.renderer().renderScreenMask(effect.context(), maskRenderType, poseStack, buffers);
+            } finally {
+                poseStack.popPose();
+            }
+        } finally {
+            poseStack.popPose();
+            buffers.endBatch(maskRenderType);
+        }
+    }
+
     private AABB validatedCullingBounds(VisualEffectRenderer renderer, EffectRenderContext context) {
         AABB bounds = Objects.requireNonNull(renderer.cullingBounds(context), "cullingBounds");
         if (!Double.isFinite(bounds.minX) || !Double.isFinite(bounds.minY) || !Double.isFinite(bounds.minZ)
@@ -156,6 +207,24 @@ public final class ClientVisualEffectManager {
                 + context.effect().effectId());
         }
         return bounds;
+    }
+
+    private void removeFinishedEffects(ClientLevel level, long gameTime) {
+        ResourceLocation currentDimension = level.dimension().location();
+        this.activeEffects.entrySet().removeIf(entry -> {
+            StartVisualEffectPayload payload = entry.getValue().payload();
+            return !payload.dimensionId().equals(currentDimension)
+                || EffectTimeline.isFinished(gameTime, payload.startGameTime(), payload.durationTicks());
+        });
+    }
+
+    private EffectRenderContext createRenderContext(VisualEffectInstance effect, long gameTime, float partialTick) {
+        StartVisualEffectPayload payload = effect.payload();
+        EffectTransform transform = effect.interpolatedTransform(gameTime, partialTick);
+        float age = (float)EffectTimeline.ageTicks(gameTime, partialTick, payload.startGameTime());
+        float progress = EffectTimeline.progress(gameTime, partialTick, payload.startGameTime(),
+            payload.durationTicks());
+        return new EffectRenderContext(effect, transform, age, progress, partialTick);
     }
 
     void onLevelUnload(ClientLevel level) {

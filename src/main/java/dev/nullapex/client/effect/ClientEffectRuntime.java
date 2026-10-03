@@ -3,6 +3,7 @@ package dev.nullapex.client.effect;
 import dev.nullapex.dragon.effect.network.StartVisualEffectPayload;
 import dev.nullapex.dragon.effect.network.StopVisualEffectPayload;
 import dev.nullapex.dragon.effect.network.UpdateVisualEffectPayload;
+import java.util.List;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
@@ -55,15 +56,12 @@ public final class ClientEffectRuntime {
         } else if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_LEVEL) {
             ClientScreenCompositor current = screenCompositor;
             if (current != null) {
-                current.render(event);
+                ClientVisualEffectManager effectManager = manager;
+                List<ScreenEffectFrame> screenEffects = effectManager == null
+                    ? List.of()
+                    : effectManager.screenEffects(event);
+                current.render(event, effectManager, screenEffects);
             }
-        }
-    }
-
-    static void setScreenCompositorEnabled(boolean enabled) {
-        ClientScreenCompositor current = screenCompositor;
-        if (current != null) {
-            current.setEnabled(enabled);
         }
     }
 
