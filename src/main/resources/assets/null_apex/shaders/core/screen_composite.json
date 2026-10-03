@@ -4,7 +4,8 @@
   "samplers": [
     { "name": "SceneSampler" },
     { "name": "MaskSampler" },
-    { "name": "DepthSampler" }
+    { "name": "DepthSampler" },
+    { "name": "BlurSampler" }
   ],
   "attributes": [
     "Position"
@@ -17,6 +18,8 @@
     { "name": "WaveFrequency", "type": "float", "count": 1, "values": [ 12.0 ] },
     { "name": "WaveSpeed", "type": "float", "count": 1, "values": [ 0.035 ] },
     { "name": "WaveTime", "type": "float", "count": 1, "values": [ 0.0 ] },
-    { "name": "ViewportWidth", "type": "float", "count": 1, "values": [ 1.0 ] }
+    { "name": "ViewportWidth", "type": "float", "count": 1, "values": [ 1.0 ] },
+    { "name": "ViewportHeight", "type": "float", "count": 1, "values": [ 1.0 ] },
+    { "name": "BlurRadiusPixels", "type": "float", "count": 1, "values": [ 8.0 ] }
   ]
 }

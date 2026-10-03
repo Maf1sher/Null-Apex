@@ -10,6 +10,9 @@ public final class EffectVisualIds {
     public static final ResourceLocation DEBUG_WAVE_DISTORTION = ResourceLocation.fromNamespaceAndPath(
         NullApex.MOD_ID, "debug_wave_distortion"
     );
+    public static final ResourceLocation DEBUG_SCENE_BLUR = ResourceLocation.fromNamespaceAndPath(
+        NullApex.MOD_ID, "debug_scene_blur"
+    );
 
     private EffectVisualIds() {
     }

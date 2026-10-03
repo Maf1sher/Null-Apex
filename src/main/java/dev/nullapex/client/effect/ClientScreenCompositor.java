@@ -28,6 +28,7 @@ final class ClientScreenCompositor {
     private TextureTarget sceneColorTarget;
     private TextureTarget compositionTarget;
     private TextureTarget screenMaskTarget;
+    private TextureTarget blurTarget;
     private boolean hadScreenEffects;
     private boolean failAfterCompositionOnce;
     private int unavailableWidth = -1;
@@ -74,7 +75,9 @@ final class ClientScreenCompositor {
 
         boolean sceneCaptured = false;
         try {
-            this.ensureTargets(width, height);
+            boolean needsBlurTarget = screenEffects.stream()
+                .anyMatch(effect -> effect.settings().operation() == ScreenEffectOperation.MASK_SCOPED_SCENE_BLUR);
+            this.ensureTargets(width, height, needsBlurTarget);
             if (mainTarget.getDepthTextureId() <= 0 || this.screenMaskTarget.getDepthTextureId() <= 0) {
                 throw new IllegalStateException("The main render target has no sampleable depth attachment");
             }
@@ -173,10 +176,37 @@ final class ClientScreenCompositor {
         this.drawComposite(destination, shader);
     }
 
+    private void compositeSceneBlur(RenderTarget sourceColor, RenderTarget destination,
+        ScreenEffectFrame screenEffect) {
+        ShaderInstance shader = Objects.requireNonNull(EffectRenderTypes.screenCompositeShader(),
+            "screen composite shader is not registered");
+        SceneBlurSettings settings = Objects.requireNonNull(
+            screenEffect.settings().sceneBlurSettings(), "scene blur settings");
+        TextureTarget blur = Objects.requireNonNull(this.blurTarget, "scene blur target");
+
+        this.bindCompositeInputs(shader, sourceColor, screenEffect.mask());
+        this.setUniform(shader, "Operation", 2.0F);
+        this.setBlurUniforms(shader, settings, sourceColor);
+        this.drawComposite(blur, shader);
+
+        this.bindCompositeInputs(shader, sourceColor, screenEffect.mask());
+        shader.setSampler("BlurSampler", blur.getColorTextureId());
+        this.setUniform(shader, "Operation", 3.0F);
+        this.setBlurUniforms(shader, settings, destination);
+        this.drawComposite(destination, shader);
+    }
+
+    private void setBlurUniforms(ShaderInstance shader, SceneBlurSettings settings, RenderTarget viewport) {
+        this.setUniform(shader, "BlurRadiusPixels", settings.radiusPixels());
+        this.setUniform(shader, "ViewportWidth", viewport.width);
+        this.setUniform(shader, "ViewportHeight", viewport.height);
+    }
+
     private void bindCompositeInputs(ShaderInstance shader, RenderTarget sourceColor, ScreenEffectMask mask) {
         shader.setSampler("SceneSampler", sourceColor.getColorTextureId());
         shader.setSampler("MaskSampler", this.screenMaskTarget.getColorTextureId());
         shader.setSampler("DepthSampler", this.screenMaskTarget.getDepthTextureId());
+        shader.setSampler("BlurSampler", sourceColor.getColorTextureId());
         AbstractUniform maskColor = Objects.requireNonNull(shader.getUniform("MaskColor"), "MaskColor uniform");
         maskColor.set(mask.red(), mask.green(), mask.blue());
         this.setUniform(shader, "MaskStrength", mask.strength());
@@ -211,6 +241,7 @@ final class ClientScreenCompositor {
         switch (screenEffect.settings().operation()) {
             case DIAGNOSTIC_MASK_PREVIEW -> this.compositeMask(sourceColor, destination, screenEffect.mask());
             case MASK_SCOPED_WAVE_DISTORTION -> this.compositeWaveDistortion(sourceColor, destination, screenEffect);
+            case MASK_SCOPED_SCENE_BLUR -> this.compositeSceneBlur(sourceColor, destination, screenEffect);
         }
     }
 
@@ -219,10 +250,15 @@ final class ClientScreenCompositor {
         uniform.set(value);
     }
 
-    private void ensureTargets(int width, int height) {
+    private void ensureTargets(int width, int height, boolean needsBlurTarget) {
         this.sceneColorTarget = this.ensureTarget(this.sceneColorTarget, width, height, false);
         this.compositionTarget = this.ensureTarget(this.compositionTarget, width, height, false);
         this.screenMaskTarget = this.ensureTarget(this.screenMaskTarget, width, height, true);
+        if (needsBlurTarget) {
+            this.blurTarget = this.ensureTarget(this.blurTarget, width, height, false);
+        } else {
+            this.releaseBlurTarget();
+        }
     }
 
     private TextureTarget ensureTarget(TextureTarget target, int width, int height, boolean useDepth) {
@@ -274,9 +310,16 @@ final class ClientScreenCompositor {
         this.sceneColorTarget = null;
         this.compositionTarget = null;
         this.screenMaskTarget = null;
+        this.releaseBlurTarget();
         this.releaseTarget(sceneColor);
         this.releaseTarget(composition);
         this.releaseTarget(mask);
+    }
+
+    private void releaseBlurTarget() {
+        TextureTarget blur = this.blurTarget;
+        this.blurTarget = null;
+        this.releaseTarget(blur);
     }
 
     private void releaseTarget(TextureTarget target) {

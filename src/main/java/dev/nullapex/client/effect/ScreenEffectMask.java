@@ -1,6 +1,6 @@
 package dev.nullapex.client.effect;
 
-/** Per-effect mask-composition inputs. The current compositor uses these for its diagnostic mask preview. */
+/** Per-effect mask-composition inputs; color is diagnostic-only and strength applies to every operation. */
 public record ScreenEffectMask(float red, float green, float blue, float strength) {
     public ScreenEffectMask {
         if (!isUnitInterval(red) || !isUnitInterval(green) || !isUnitInterval(blue)

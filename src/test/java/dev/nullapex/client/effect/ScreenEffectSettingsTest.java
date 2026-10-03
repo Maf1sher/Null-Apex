@@ -1,5 +1,6 @@
 package dev.nullapex.client.effect;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -29,5 +30,24 @@ class ScreenEffectSettingsTest {
     void rejectsWaveSettingsForTheDiagnosticOperation() {
         assertThrows(IllegalArgumentException.class, () -> new ScreenEffectSettings(
             ScreenEffectOperation.DIAGNOSTIC_MASK_PREVIEW, WaveDistortionSettings.DEBUG_DEFAULT));
+    }
+
+    @Test
+    void sceneBlurRequiresItsSettings() {
+        assertThrows(NullPointerException.class,
+            () -> new ScreenEffectSettings(ScreenEffectOperation.MASK_SCOPED_SCENE_BLUR));
+        assertDoesNotThrow(() -> ScreenEffectSettings.sceneBlur(SceneBlurSettings.DEBUG_DEFAULT));
+    }
+
+    @Test
+    void rejectsSettingsBelongingToAnotherOperation() {
+        assertThrows(IllegalArgumentException.class, () -> new ScreenEffectSettings(
+            ScreenEffectOperation.MASK_SCOPED_SCENE_BLUR,
+            WaveDistortionSettings.DEBUG_DEFAULT,
+            SceneBlurSettings.DEBUG_DEFAULT));
+        assertThrows(IllegalArgumentException.class, () -> new ScreenEffectSettings(
+            ScreenEffectOperation.MASK_SCOPED_WAVE_DISTORTION,
+            WaveDistortionSettings.DEBUG_DEFAULT,
+            SceneBlurSettings.DEBUG_DEFAULT));
     }
 }
