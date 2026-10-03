@@ -1,7 +1,7 @@
 package dev.nullapex.dragon.effect.network;
 
 import dev.nullapex.NullApex;
-import dev.nullapex.client.effect.ClientVisualEffectManager;
+import dev.nullapex.client.effect.ClientEffectRuntime;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -19,19 +19,19 @@ public final class EffectNetwork {
         registrar.playToClient(StartVisualEffectPayload.TYPE, StartVisualEffectPayload.STREAM_CODEC,
             (payload, context) -> {
                 if (FMLEnvironment.dist == Dist.CLIENT) {
-                    context.enqueueWork(() -> ClientVisualEffectManager.start(payload));
+                    context.enqueueWork(() -> ClientEffectRuntime.start(payload));
                 }
             });
         registrar.playToClient(UpdateVisualEffectPayload.TYPE, UpdateVisualEffectPayload.STREAM_CODEC,
             (payload, context) -> {
                 if (FMLEnvironment.dist == Dist.CLIENT) {
-                    context.enqueueWork(() -> ClientVisualEffectManager.update(payload));
+                    context.enqueueWork(() -> ClientEffectRuntime.update(payload));
                 }
             });
         registrar.playToClient(StopVisualEffectPayload.TYPE, StopVisualEffectPayload.STREAM_CODEC,
             (payload, context) -> {
                 if (FMLEnvironment.dist == Dist.CLIENT) {
-                    context.enqueueWork(() -> ClientVisualEffectManager.stop(payload));
+                    context.enqueueWork(() -> ClientEffectRuntime.stop(payload));
                 }
             });
     }

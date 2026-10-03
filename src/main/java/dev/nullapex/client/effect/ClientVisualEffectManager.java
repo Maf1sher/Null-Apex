@@ -12,71 +12,83 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
-/** Client-side owner for transient visual effect instances. */
+/** Instance-owned state and rendering for transient client visual effects. */
 public final class ClientVisualEffectManager {
     private static final int MAX_ACTIVE_EFFECTS = 128;
-    private static final Map<UUID, VisualEffectInstance> ACTIVE_EFFECTS = new LinkedHashMap<>();
+    private final Map<UUID, VisualEffectInstance> activeEffects = new LinkedHashMap<>();
+    private final VisualEffectRendererRegistry rendererRegistry;
+    private ClientLevel currentLevel;
 
-    private ClientVisualEffectManager() {
+    ClientVisualEffectManager(VisualEffectRendererRegistry rendererRegistry) {
+        this.rendererRegistry = rendererRegistry;
     }
 
-    public static void start(StartVisualEffectPayload payload) {
+    void start(StartVisualEffectPayload payload) {
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.level == null || !minecraft.level.dimension().location().equals(payload.dimensionId())) {
+        ClientLevel level = minecraft.level;
+        this.synchronizeLevel(level);
+        if (level == null || !level.dimension().location().equals(payload.dimensionId())) {
             return;
         }
-        VisualEffectRendererRegistry.registerBuiltIns();
-        if (VisualEffectRendererRegistry.find(payload.effectId()).isEmpty()) {
+        if (this.rendererRegistry.find(payload.effectId()).isEmpty()) {
             return;
         }
-        ACTIVE_EFFECTS.put(payload.instanceId(), new VisualEffectInstance(payload, minecraft.level.getGameTime()));
-        while (ACTIVE_EFFECTS.size() > MAX_ACTIVE_EFFECTS) {
-            UUID oldest = ACTIVE_EFFECTS.keySet().iterator().next();
-            ACTIVE_EFFECTS.remove(oldest);
+        this.activeEffects.put(payload.instanceId(), new VisualEffectInstance(payload, level.getGameTime()));
+        while (this.activeEffects.size() > MAX_ACTIVE_EFFECTS) {
+            UUID oldest = this.activeEffects.keySet().iterator().next();
+            this.activeEffects.remove(oldest);
         }
     }
 
-    public static void stop(StopVisualEffectPayload payload) {
+    void stop(StopVisualEffectPayload payload) {
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.level == null || !minecraft.level.dimension().location().equals(payload.dimensionId())) {
+        ClientLevel level = minecraft.level;
+        this.synchronizeLevel(level);
+        if (level == null || !level.dimension().location().equals(payload.dimensionId())) {
             return;
         }
-        ACTIVE_EFFECTS.remove(payload.instanceId());
+        this.activeEffects.remove(payload.instanceId());
     }
 
-    public static void update(UpdateVisualEffectPayload payload) {
+    void update(UpdateVisualEffectPayload payload) {
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.level == null || !minecraft.level.dimension().location().equals(payload.dimensionId())) {
+        ClientLevel level = minecraft.level;
+        this.synchronizeLevel(level);
+        if (level == null || !level.dimension().location().equals(payload.dimensionId())) {
             return;
         }
-        VisualEffectInstance effect = ACTIVE_EFFECTS.get(payload.instanceId());
+        VisualEffectInstance effect = this.activeEffects.get(payload.instanceId());
         if (effect != null) {
-            ACTIVE_EFFECTS.put(payload.instanceId(), effect.withTransform(payload.transform(), payload.updateGameTime()));
+            this.activeEffects.put(payload.instanceId(),
+                effect.withTransform(payload.transform(), payload.updateGameTime()));
         }
     }
 
-    public static void render(net.neoforged.neoforge.client.event.RenderLevelStageEvent event) {
+    void render(net.neoforged.neoforge.client.event.RenderLevelStageEvent event) {
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.level == null) {
-            ACTIVE_EFFECTS.clear();
+        ClientLevel level = minecraft.level;
+        this.synchronizeLevel(level);
+        if (level == null) {
             return;
         }
-        ResourceLocation currentDimension = minecraft.level.dimension().location();
-        long gameTime = minecraft.level.getGameTime();
+        ResourceLocation currentDimension = level.dimension().location();
+        long gameTime = level.getGameTime();
         float partialTick = event.getPartialTick().getGameTimeDeltaPartialTick(false);
-        ACTIVE_EFFECTS.entrySet().removeIf(entry -> {
+        this.activeEffects.entrySet().removeIf(entry -> {
             StartVisualEffectPayload payload = entry.getValue().payload();
             return !payload.dimensionId().equals(currentDimension)
                 || EffectTimeline.isFinished(gameTime, payload.startGameTime(), payload.durationTicks());
         });
 
-        if (ACTIVE_EFFECTS.isEmpty()) {
+        if (this.activeEffects.isEmpty()) {
             return;
         }
 
@@ -87,8 +99,8 @@ public final class ClientVisualEffectManager {
         poseStack.pushPose();
         poseStack.translate(-cameraPosition.x, -cameraPosition.y, -cameraPosition.z);
         try {
-            for (VisualEffectInstance effect : ACTIVE_EFFECTS.values()) {
-                VisualEffectRendererRegistry.find(effect.effectId()).ifPresent(renderer -> {
+            for (VisualEffectInstance effect : this.activeEffects.values()) {
+                this.rendererRegistry.find(effect.effectId()).ifPresent(renderer -> {
                     StartVisualEffectPayload payload = effect.payload();
                     EffectTransform transform = effect.interpolatedTransform(gameTime, partialTick);
                     double cullingRadius = payload.scale();
@@ -125,6 +137,24 @@ public final class ClientVisualEffectManager {
             for (RenderType renderType : usedRenderTypes) {
                 buffers.endBatch(renderType);
             }
+        }
+    }
+
+    void onLevelUnload(ClientLevel level) {
+        if (this.currentLevel == level) {
+            this.activeEffects.clear();
+            this.currentLevel = null;
+        }
+    }
+
+    void onResourceReload(ResourceManager resourceManager) {
+        this.rendererRegistry.onResourceReload(resourceManager);
+    }
+
+    private void synchronizeLevel(ClientLevel level) {
+        if (this.currentLevel != level) {
+            this.activeEffects.clear();
+            this.currentLevel = level;
         }
     }
 }

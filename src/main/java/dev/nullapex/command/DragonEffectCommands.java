@@ -28,6 +28,7 @@ import net.neoforged.neoforge.event.RegisterCommandsEvent;
 @EventBusSubscriber(modid = NullApex.MOD_ID, bus = EventBusSubscriber.Bus.GAME)
 public final class DragonEffectCommands {
     private static final float ANGLE_LIMIT_DEGREES = 360.0F;
+    private static final int DEBUG_EFFECT_LIFETIME_TICKS = 30 * 20;
 
     private DragonEffectCommands() {
     }
@@ -135,7 +136,7 @@ public final class DragonEffectCommands {
             angles.pitch(),
             angles.roll(),
             5.0F,
-            120,
+            DEBUG_EFFECT_LIFETIME_TICKS,
             level.getRandom().nextLong(),
             EffectAudience.nearby(128.0)
         ));
@@ -146,7 +147,7 @@ public final class DragonEffectCommands {
         if (entity == null) {
             return false;
         }
-        entity.configureLifetime(80);
+        entity.configureLifetime(DEBUG_EFFECT_LIFETIME_TICKS);
         entity.setPos(position.x, position.y, position.z);
         entity.setYRot(angles.yaw());
         entity.setXRot(angles.pitch());
