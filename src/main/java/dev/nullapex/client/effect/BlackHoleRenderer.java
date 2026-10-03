@@ -25,10 +25,10 @@ final class BlackHoleRenderer implements ScreenEffectRenderer {
     private static final RenderType SCREEN_MASK_RENDER_TYPE = EffectRenderTypes.blackHoleScreenMask(TEXTURE);
     private static final String CORE_PASS = "core";
     private static final String DISK_PASS = "disk";
-    private static final int SPHERE_LATITUDE_SEGMENTS = 64;
-    private static final int SPHERE_LONGITUDE_SEGMENTS = 128;
-    private static final int DISK_ANGULAR_SEGMENTS = 128;
-    private static final int DISK_RADIAL_SEGMENTS = 12;
+    private static final int SPHERE_LATITUDE_SEGMENTS = 32;
+    private static final int SPHERE_LONGITUDE_SEGMENTS = 64;
+    private static final int DISK_ANGULAR_SEGMENTS = 64;
+    private static final int DISK_RADIAL_SEGMENTS = 6;
     private static final float CORE_RADIUS_FACTOR = 0.38F;
     private static final float DISK_INNER_RADIUS_FACTOR = 0.42F;
     private static final float DISK_RADIUS_FACTOR = 1.25F;
