@@ -13,6 +13,9 @@ public final class EffectVisualIds {
     public static final ResourceLocation DEBUG_SCENE_BLUR = ResourceLocation.fromNamespaceAndPath(
         NullApex.MOD_ID, "debug_scene_blur"
     );
+    public static final ResourceLocation DEBUG_BLOOM = ResourceLocation.fromNamespaceAndPath(
+        NullApex.MOD_ID, "debug_bloom"
+    );
 
     private EffectVisualIds() {
     }

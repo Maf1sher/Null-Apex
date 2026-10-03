@@ -40,6 +40,14 @@ class ScreenEffectSettingsTest {
     }
 
     @Test
+    void bloomRequiresItsSettings() {
+        assertThrows(NullPointerException.class,
+            () -> new ScreenEffectSettings(ScreenEffectOperation.MASK_SCOPED_BLOOM));
+        assertEquals(ScreenEffectOperation.MASK_SCOPED_BLOOM,
+            ScreenEffectSettings.bloom(BloomSettings.DEBUG_DEFAULT).operation());
+    }
+
+    @Test
     void rejectsSettingsBelongingToAnotherOperation() {
         assertThrows(IllegalArgumentException.class, () -> new ScreenEffectSettings(
             ScreenEffectOperation.MASK_SCOPED_SCENE_BLUR,
@@ -49,5 +57,15 @@ class ScreenEffectSettingsTest {
             ScreenEffectOperation.MASK_SCOPED_WAVE_DISTORTION,
             WaveDistortionSettings.DEBUG_DEFAULT,
             SceneBlurSettings.DEBUG_DEFAULT));
+        assertThrows(IllegalArgumentException.class, () -> new ScreenEffectSettings(
+            ScreenEffectOperation.MASK_SCOPED_BLOOM,
+            WaveDistortionSettings.DEBUG_DEFAULT,
+            null,
+            BloomSettings.DEBUG_DEFAULT));
+        assertThrows(IllegalArgumentException.class, () -> new ScreenEffectSettings(
+            ScreenEffectOperation.MASK_SCOPED_BLOOM,
+            null,
+            SceneBlurSettings.DEBUG_DEFAULT,
+            BloomSettings.DEBUG_DEFAULT));
     }
 }

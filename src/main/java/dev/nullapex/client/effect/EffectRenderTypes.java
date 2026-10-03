@@ -17,6 +17,7 @@ final class EffectRenderTypes {
     private static ShaderInstance visualEffectShader;
     private static ShaderInstance screenMaskShader;
     private static ShaderInstance screenCompositeShader;
+    private static ShaderInstance screenBloomShader;
     private static final RenderStateShard.ShaderStateShard VISUAL_EFFECT_SHADER =
         new RenderStateShard.ShaderStateShard(() -> visualEffectShader);
     private static final RenderStateShard.ShaderStateShard SCREEN_MASK_SHADER =
@@ -56,6 +57,10 @@ final class EffectRenderTypes {
         return screenCompositeShader;
     }
 
+    static ShaderInstance screenBloomShader() {
+        return screenBloomShader;
+    }
+
     static RenderType entityUnsorted(ResourceLocation texture) {
         return ENTITY_UNSORTED.apply(texture);
     }
@@ -78,6 +83,12 @@ final class EffectRenderTypes {
         event.registerShader(
             new ShaderInstance(event.getResourceProvider(), compositeShaderId, DefaultVertexFormat.POSITION),
             shader -> screenCompositeShader = shader
+        );
+
+        ResourceLocation bloomShaderId = ResourceLocation.fromNamespaceAndPath(NullApex.MOD_ID, "screen_bloom");
+        event.registerShader(
+            new ShaderInstance(event.getResourceProvider(), bloomShaderId, DefaultVertexFormat.POSITION),
+            shader -> screenBloomShader = shader
         );
     }
 

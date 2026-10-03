@@ -22,6 +22,7 @@ public final class VisualEffectRendererRegistry {
         this.register(EffectVisualIds.DEBUG_RUNE_CIRCLE, new RuneCircleRenderer());
         this.register(EffectVisualIds.DEBUG_WAVE_DISTORTION, new WaveDistortionRenderer());
         this.register(EffectVisualIds.DEBUG_SCENE_BLUR, new SceneBlurRenderer());
+        this.register(EffectVisualIds.DEBUG_BLOOM, new BloomRenderer());
         this.initialized = true;
     }
 

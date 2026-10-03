@@ -63,6 +63,12 @@ public final class DragonEffectCommands {
                             context -> testSceneBlur(context.getSource(), readAngles(context))
                         ))
                         .then(withAngles(
+                            Commands.literal("bloom").executes(context -> testBloom(
+                                context.getSource(), defaultRingAngles(context.getSource())
+                            )),
+                            context -> testBloom(context.getSource(), readAngles(context))
+                        ))
+                        .then(withAngles(
                             Commands.literal("entity").executes(context -> testEntity(
                                 context.getSource(), EffectAngles.ZERO
                             )),
@@ -153,6 +159,24 @@ public final class DragonEffectCommands {
             EffectAudience.nearby(128.0)
         ));
         source.sendSuccess(() -> Component.literal("Started the visual-only scene blur test."), false);
+        return 1;
+    }
+
+    private static int testBloom(CommandSourceStack source, EffectAngles angles) {
+        ServerLevel level = source.getLevel();
+        Vec3 position = effectPosition(source);
+        VisualEffectService.start(level, new VisualEffectSpec(
+            EffectVisualIds.DEBUG_BLOOM,
+            position,
+            angles.yaw(),
+            angles.pitch(),
+            angles.roll(),
+            5.0F,
+            DEBUG_EFFECT_LIFETIME_TICKS,
+            level.getRandom().nextLong(),
+            EffectAudience.nearby(128.0)
+        ));
+        source.sendSuccess(() -> Component.literal("Started the visual-only bloom test."), false);
         return 1;
     }
 

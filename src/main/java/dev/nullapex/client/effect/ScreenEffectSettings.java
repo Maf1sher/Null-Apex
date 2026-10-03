@@ -6,37 +6,49 @@ import java.util.Objects;
 public record ScreenEffectSettings(
     ScreenEffectOperation operation,
     WaveDistortionSettings waveDistortionSettings,
-    SceneBlurSettings sceneBlurSettings
+    SceneBlurSettings sceneBlurSettings,
+    BloomSettings bloomSettings
 ) {
     public static final ScreenEffectSettings DIAGNOSTIC_PREVIEW =
         new ScreenEffectSettings(ScreenEffectOperation.DIAGNOSTIC_MASK_PREVIEW);
 
     public ScreenEffectSettings(ScreenEffectOperation operation) {
-        this(operation, null, null);
+        this(operation, null, null, null);
     }
 
     public ScreenEffectSettings(ScreenEffectOperation operation, WaveDistortionSettings waveDistortionSettings) {
-        this(operation, waveDistortionSettings, null);
+        this(operation, waveDistortionSettings, null, null);
+    }
+
+    public ScreenEffectSettings(ScreenEffectOperation operation, WaveDistortionSettings waveDistortionSettings,
+        SceneBlurSettings sceneBlurSettings) {
+        this(operation, waveDistortionSettings, sceneBlurSettings, null);
     }
 
     public ScreenEffectSettings {
         Objects.requireNonNull(operation, "operation");
         switch (operation) {
             case DIAGNOSTIC_MASK_PREVIEW -> {
-                if (waveDistortionSettings != null || sceneBlurSettings != null) {
+                if (waveDistortionSettings != null || sceneBlurSettings != null || bloomSettings != null) {
                     throw new IllegalArgumentException("Diagnostic preview does not accept operation settings");
                 }
             }
             case MASK_SCOPED_WAVE_DISTORTION -> {
                 Objects.requireNonNull(waveDistortionSettings, "waveDistortionSettings");
-                if (sceneBlurSettings != null) {
-                    throw new IllegalArgumentException("Scene blur settings only apply to scene blur");
+                if (sceneBlurSettings != null || bloomSettings != null) {
+                    throw new IllegalArgumentException("Settings only apply to their matching screen operation");
                 }
             }
             case MASK_SCOPED_SCENE_BLUR -> {
                 Objects.requireNonNull(sceneBlurSettings, "sceneBlurSettings");
-                if (waveDistortionSettings != null) {
-                    throw new IllegalArgumentException("Wave settings only apply to wave distortion");
+                if (waveDistortionSettings != null || bloomSettings != null) {
+                    throw new IllegalArgumentException("Settings only apply to their matching screen operation");
+                }
+            }
+            case MASK_SCOPED_BLOOM -> {
+                Objects.requireNonNull(bloomSettings, "bloomSettings");
+                if (waveDistortionSettings != null || sceneBlurSettings != null) {
+                    throw new IllegalArgumentException("Settings only apply to their matching screen operation");
                 }
             }
         }
@@ -49,6 +61,11 @@ public record ScreenEffectSettings(
 
     public static ScreenEffectSettings sceneBlur(SceneBlurSettings settings) {
         return new ScreenEffectSettings(ScreenEffectOperation.MASK_SCOPED_SCENE_BLUR, null,
+            Objects.requireNonNull(settings, "settings"));
+    }
+
+    public static ScreenEffectSettings bloom(BloomSettings settings) {
+        return new ScreenEffectSettings(ScreenEffectOperation.MASK_SCOPED_BLOOM, null, null,
             Objects.requireNonNull(settings, "settings"));
     }
 }
